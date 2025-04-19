@@ -116,20 +116,20 @@ def handle_text(update, context):
 
         if not text or len(text) > 500:
             context.bot.send_message(chat_id=update.effective_chat.id, 
-                                  text="الرجاء إرسال نص صالح (بين 1-500 حرف).")
+                                   text="الرجاء إرسال نص صالح (بين 1-500 حرف).")
             return
 
         voice_id = user_voice_ids.get(user_id)
         if not voice_id:
             context.bot.send_message(chat_id=update.effective_chat.id, 
-                                  text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).")
+                                   text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).")
             return
 
-        # تحضير بيانات الطلب
+        # تحضير بيانات الطلب مع الهيكل الصحيح
         payload = {
-            "text": text,
-            "voiceId": voice_id,
-            "outputFormat": "mp3"
+            "input": text,  # تغيير من "text" إلى "input" كما تتوقع API
+            "voice_id": voice_id,  # التأكد من أن اسم الحقل يتطابق مع ما تتوقعه API
+            "output_format": "mp3"
         }
 
         # إرسال الطلب إلى API
@@ -144,9 +144,9 @@ def handle_text(update, context):
             timeout=25
         )
 
-        # تسجيل الرد الكامل للأغراض التشخيصية
-        logger.info(f"API Response Status: {response.status_code}")
-        logger.info(f"API Response Content: {response.text}")
+        # تسجيل الطلب والرد للأغراض التشخيصية
+        logger.info(f"Request payload: {payload}")
+        logger.info(f"API Response: {response.status_code} - {response.text}")
 
         # معالجة الرد
         if response.status_code == 200:
@@ -157,14 +157,13 @@ def handle_text(update, context):
                     context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio_url)
                 else:
                     context.bot.send_message(chat_id=update.effective_chat.id, 
-                                          text="❌ لم يتم إنشاء الصوت، يرجى المحاولة لاحقاً")
+                                           text="❌ لم يتم إنشاء الصوت، يرجى المحاولة لاحقاً")
             except json.JSONDecodeError:
-                logger.error("Failed to decode JSON response")
-                # إذا كان الرد غير JSON ولكن يحتوي على رابط مباشر
                 if response.text.startswith(('http://', 'https://')):
                     context.bot.send_voice(chat_id=update.effective_chat.id, voice=response.text)
                 else:
-                    raise
+                    context.bot.send_message(chat_id=update.effective_chat.id, 
+                                           text="❌ حدث خطأ في معالجة الرد من الخادم")
         else:
             try:
                 error_data = response.json()
@@ -173,12 +172,12 @@ def handle_text(update, context):
                 error_msg = response.text
                 
             context.bot.send_message(chat_id=update.effective_chat.id, 
-                                  text=f"❌ خطأ في تحويل النص: {error_msg}")
+                                   text=f"❌ خطأ في تحويل النص: {error_msg}")
 
     except Exception as e:
         logger.error(f"Error in handle_text: {str(e)}", exc_info=True)
         context.bot.send_message(chat_id=update.effective_chat.id, 
-                              text="❌ حدث خطأ غير متوقع أثناء معالجة النص")
+                               text="❌ حدث خطأ غير متوقع أثناء معالجة النص")
 # إضافة handlers
 dp.add_handler(CommandHandler("start", start))
 dp.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
