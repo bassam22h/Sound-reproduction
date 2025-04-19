@@ -129,7 +129,7 @@ def handle_text(update, context):
         user_id = update.message.from_user.id
         text = update.message.text.strip()
 
-        if not text or len(text) > 500:  # زيادة الحد إلى 500 حرف
+        if not text or len(text) > 500:
             update.message.reply_text("الرجاء إرسال نص صالح (500 حرف كحد أقصى).")
             return
 
@@ -143,16 +143,17 @@ def handle_text(update, context):
             'Content-Type': 'application/json'
         }
 
-        # التعديل الرئيسي هنا: تغيير هيكل الطلب حسب وثائق API
+        # الهيكل المعدل حسب وثائق Speechify API
         payload = {
-            'input': {  # الحقل المطلوب حسب السجلات
-                'text': text,
-                'voice_id': voice_id,
-                'output_format': 'mp3'
-            }
+            "text": text,
+            "voice_id": voice_id,
+            "output_format": "mp3",
+            "speed": 1.0,  # السرعة الطبيعية
+            "pitch": 1.0,  # الطبقة الصوتية الطبيعية
+            "language": "ar"  # اللغة العربية
         }
 
-        logger.info(f"إرسال طلب تحويل النص: {payload}")
+        logger.info(f"طلب TTS: {json.dumps(payload, ensure_ascii=False)}")
 
         response = session.post(
             'https://api.sws.speechify.com/v1/audio/speech',
@@ -161,30 +162,29 @@ def handle_text(update, context):
             timeout=30
         )
 
-        logger.info(f"استجابة تحويل النص: {response.status_code} - {response.text}")
+        logger.info(f"استجابة TTS: {response.status_code} - {response.text}")
 
         if response.status_code == 200:
             try:
                 response_data = response.json()
-                if 'url' in response_data:
-                    update.message.reply_voice(response_data['url'])
-                elif 'audio_url' in response_data:  # بعض APIs تستخدم تسميات مختلفة
+                if 'audio_url' in response_data:
                     update.message.reply_voice(response_data['audio_url'])
+                elif 'url' in response_data:
+                    update.message.reply_voice(response_data['url'])
                 else:
-                    logger.error("لا يوجد رابط صوت في الاستجابة")
-                    update.message.reply_text("❌ لم يتم إنشاء الصوت")
+                    logger.error("هيكل الاستجابة غير متوقع")
+                    update.message.reply_text("❌ خطأ في معالجة الاستجابة")
             except ValueError as e:
-                logger.error(f"خطأ في تحليل JSON: {str(e)}")
-                update.message.reply_text("❌ خطأ في معالجة الاستجابة")
+                logger.error(f"خطأ JSON: {str(e)}")
+                update.message.reply_text("❌ خطأ في معالجة البيانات")
         else:
-            error_msg = response.text[:200] if response.text else f"خطأ {response.status_code}"
-            logger.error(f"خطأ تحويل النص: {error_msg}")
-            update.message.reply_text(f"❌ فشل التحويل: {error_msg}")
+            error_msg = response.text if response.text else f"خطأ {response.status_code}"
+            logger.error(f"تفاصيل الخطأ: {error_msg}")
+            update.message.reply_text("❌ فشل التحويل. الرجاء المحاولة لاحقاً")
 
     except Exception as e:
         logger.error(f"خطأ غير متوقع: {str(e)}", exc_info=True)
         update.message.reply_text("❌ حدث خطأ غير متوقع")
-
 # ===== Webhook Route =====
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
 def webhook():
