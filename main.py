@@ -1,6 +1,6 @@
 import os
 import logging
-import io
+import json
 from flask import Flask, request
 from telegram import Bot, Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
@@ -8,7 +8,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-# إعداد اتصالات requests المحسنة
+# إعداد اتصالات requests محسنة
 session = requests.Session()
 retry_strategy = Retry(
     total=3,
@@ -38,7 +38,10 @@ app = Flask(__name__)
 user_voice_ids = {}
 
 def start(update, context):
-    update.message.reply_text("مرحباً! أرسل مقطعاً صوتياً (10-30 ثانية، أقل من 5MB) لاستنساخ صوتك.")
+    update.message.reply_text(
+        "مرحباً! أرسل مقطعاً صوتياً (10-30 ثانية) لاستنساخ صوتك.\n"
+        "⚠️ سيتم استخدام صوتك وفق شروط الخدمة"
+    )
 
 def handle_audio(update, context):
     try:
@@ -49,78 +52,78 @@ def handle_audio(update, context):
             update.message.reply_text("الرجاء إرسال مقطع صوتي فقط.")
             return
 
-        # تحميل الملف الصوتي
-        tg_file = bot.get_file(file.file_id)
-        audio_data = session.get(tg_file.file_path, timeout=10).content
+        # التحقق من حجم الملف (5MB كحد أقصى)
+        MAX_SIZE_MB = 5
+        if file.file_size > MAX_SIZE_MB * 1024 * 1024:
+            update.message.reply_text(f"❌ حجم الملف كبير جداً. الحد الأقصى {MAX_SIZE_MB}MB")
+            return
 
-        # الطريقة المضمونة لإرسال البيانات
+        # تحميل الملف الصوتي
+        try:
+            tg_file = bot.get_file(file.file_id)
+            audio_data = session.get(tg_file.file_path, timeout=10).content
+        except Exception as e:
+            logger.error(f"فشل التحميل: {str(e)}")
+            update.message.reply_text("❌ فشل تحميل الملف الصوتي")
+            return
+
+        # إعداد بيانات الموافقة حسب الوثائق
+        consent_data = {
+            "fullName": f"User_{user_id}",  # يمكن استبداله باسم المستخدم الحقيقي
+            "email": f"user_{user_id}@bot.com"  # يمكن استبداله بإيميل المستخدم
+        }
+
+        # إعداد الطلب حسب الوثائق الرسمية
         headers = {
             'Authorization': f'Bearer {API_KEY}',
             'Accept': 'application/json'
         }
 
-        # المحاولة بجميع الصيغ الممكنة للموافقة
-        consent_attempts = [
-            {'consent': 'true', 'consent_type': 'explicit'},  # الأكثر شيوعاً
-            {'consent': '1', 'consent_verified': 'true'},     # البديل الرقمي
-            {'consent': 'agreed'},                           # صيغة بديلة
-            {'consent': 'yes', 'terms_accepted': 'true'},     # صيغة أخرى
-            {'consent': 'approved'},                          # كحل أخير
-            {}  # محاولة بدون أي معاملات موافقة (في حال كان السيرفر يتجاهلها)
-        ]
+        data = {
+            'name': f'user_{user_id}_voice',
+            'gender': 'male',  # أو 'female' أو 'notSpecified'
+            'locale': 'ar-SA',  # كود اللغة (ar-SA للعربية)
+            'consent': json.dumps(consent_data)  # يجب أن يكون JSON string
+        }
 
-        for attempt in consent_attempts:
-            try:
-                # إعداد البيانات مع المحاولة الحالية
-                data = {'name': f'user_{user_id}_voice', **attempt}
-                
-                # إرسال الطلب بطريقتين مختلفتين
-                for use_json in [False, True]:
-                    try:
-                        if use_json:
-                            # المحاولة بإرسال البيانات كـ JSON
-                            response = session.post(
-                                'https://api.sws.speechify.com/v1/voices',
-                                headers={**headers, 'Content-Type': 'application/json'},
-                                json=data,
-                                files={'audio': ('voice.ogg', audio_data, 'audio/ogg')},
-                                timeout=15
-                            )
-                        else:
-                            # المحاولة بإرسال البيانات كـ form-data
-                            response = session.post(
-                                'https://api.sws.speechify.com/v1/voices',
-                                headers=headers,
-                                data=data,
-                                files={'audio': ('voice.ogg', audio_data, 'audio/ogg')},
-                                timeout=15
-                            )
+        files = {
+            'sample': ('voice.ogg', audio_data, 'audio/ogg')  # المفتاح يجب أن يكون 'sample' كما في الوثائق
+        }
 
-                        # معالجة الاستجابة
-                        if response.status_code == 200:
-                            voice_id = response.json().get('id')
-                            if voice_id:
-                                user_voice_ids[user_id] = voice_id
-                                update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
-                                return
-                            
-                        logger.info(f"Attempt: {attempt} | Method: {'JSON' if use_json else 'Form'} | Status: {response.status_code} | Response: {response.text}")
+        # إرسال الطلب
+        try:
+            response = session.post(
+                'https://api.sws.speechify.com/v1/voices',
+                headers=headers,
+                data=data,
+                files=files,
+                timeout=15
+            )
 
-                    except Exception as e:
-                        logger.error(f"Attempt failed: {str(e)}")
-                        continue
+            # معالجة الاستجابة
+            if response.status_code == 200:
+                try:
+                    response_data = response.json()
+                    if 'id' in response_data:
+                        user_voice_ids[user_id] = response_data['id']
+                        update.message.reply_text("✅ تم استنساخ صوتك بنجاح! أرسل الآن النص لتحويله إلى صوت.")
+                        return
+                    else:
+                        logger.error("لا يوجد معرف صوت في الاستجابة")
+                except ValueError:
+                    logger.error("استجابة JSON غير صالحة")
+            
+            logger.error(f"خطأ API: {response.status_code} - {response.text}")
+            update.message.reply_text("❌ فشل في معالجة الصوت. الرجاء المحاولة لاحقاً")
 
-            except Exception as e:
-                logger.error(f"Consent attempt failed: {str(e)}")
-                continue
-
-        # إذا فشلت جميع المحاولات
-        update.message.reply_text("❌ تعذر استنساخ الصوت. الرجاء التواصل مع الدعم الفني.")
-        logger.critical("All consent attempts failed")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"فشل الاتصال: {str(e)}")
+            update.message.reply_text("❌ فشل الاتصال بالخادم")
 
     except Exception as e:
-        logger.error(f"Critical error: {str(e)}", exc_info=True)
-        update.message.reply_text("❌ حدث خطأ غير متوقع في النظام.")
+        logger.error(f"خطأ غير متوقع: {str(e)}", exc_info=True)
+        update.message.reply_text("❌ حدث خطأ غير متوقع")
+
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
