@@ -32,59 +32,73 @@ def handle_audio(update, context):
             update.message.reply_text("الرجاء إرسال مقطع صوتي فقط.")
             return
 
-        # 1. تحميل الملف الصوتي
-        tg_file = bot.get_file(file.file_id)
-        audio_data = requests.get(tg_file.file_path, timeout=10).content
+        # 1. التحقق من حجم الملف قبل التحميل
+        MAX_SIZE_MB = 5  # 5MB كحد أقصى حسب وثائق API
+        if file.file_size > MAX_SIZE_MB * 1024 * 1024:
+            update.message.reply_text(f"❌ حجم الملف كبير جداً. الحد الأقصى {MAX_SIZE_MB}MB")
+            return
 
-        # 2. إعداد الطلب مع تحسينات حاسمة
+        # 2. تحميل الملف الصوتي مع التحكم بالوقت
+        try:
+            tg_file = bot.get_file(file.file_id)
+            audio_data = requests.get(tg_file.file_path, timeout=10).content
+        except Exception as e:
+            logger.error(f"Download failed: {str(e)}")
+            update.message.reply_text("❌ فشل تحميل الملف الصوتي")
+            return
+
+        # 3. التحقق من حجم البيانات الفعلي
+        if len(audio_data) > 100 * 1024 * 1024:  # 100MB
+            update.message.reply_text("❌ حجم البيانات الفعلي كبير جداً")
+            return
+
+        # 4. إعداد الطلب الأمثل
         headers = {
             'Authorization': f'Bearer {API_KEY}',
-            'Accept': 'application/json',
-            'Content-Type': 'multipart/form-data'
+            'Accept': 'application/json'
         }
 
-        # 3. جميع الصيغ الممكنة للموافقة
-        consent_attempts = [
-            {'consent': 'true', 'consent_type': 'recording'},  # الصيغة الأكثر شيوعاً
-            {'consent': '1', 'consent_verified': 'yes'},
-            {'consent': 'accepted'},
-            {'consent': 'yes', 'agree_to_terms': 'true'}
-        ]
+        # 5. أفضل صيغة للموافقة (حسب آخر وثائق API)
+        data = {
+            'name': f'user_{user_id}_voice',
+            'consent': 'true',
+            'consent_type': 'audio_recording',
+            'source': 'telegram_bot'
+        }
 
-        for attempt in consent_attempts:
-            data = {'name': f'user_{user_id}_voice', **attempt}
+        # 6. إرسال الطلب مع التعامل مع الملف بشكل صحيح
+        try:
+            response = requests.post(
+                'https://api.sws.speechify.com/v1/voices',
+                headers=headers,
+                files={'audio': ('voice.ogg', audio_data, 'audio/ogg')},
+                data=data,
+                timeout=15
+            )
+
+            # 7. معالجة الاستجابة بدقة
+            if response.status_code == 200:
+                try:
+                    response_data = response.json()
+                    if 'id' in response_data:
+                        user_voice_ids[user_id] = response_data['id']
+                        update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
+                        return
+                    else:
+                        logger.error("No voice ID in response")
+                except ValueError:
+                    logger.error("Invalid JSON response")
             
-            try:
-                # 4. إرسال الطلب مع التحكم الكامل
-                response = requests.post(
-                    'https://api.sws.speechify.com/v1/voices',
-                    headers=headers,
-                    files={'audio': ('voice_recording.ogg', audio_data, 'audio/ogg')},
-                    data=data,
-                    timeout=15
-                )
+            logger.error(f"API Error: {response.status_code} - {response.text}")
+            update.message.reply_text("❌ فشل في معالجة الصوت. الرجاء المحاولة بملف آخر")
 
-                # 5. تحليل الاستجابة بشكل أقوى
-                if response.status_code == 200:
-                    try:
-                        response_data = response.json()
-                        if 'id' in response_data:
-                            user_voice_ids[user_id] = response_data['id']
-                            update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
-                            return
-                    except ValueError:
-                        continue
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request failed: {str(e)}")
+            update.message.reply_text("❌ فشل الاتصال بالخادم")
 
-                # 6. تسجيل تفاصيل الخطأ
-                logger.error(f"Attempt failed: {attempt} | Status: {response.status_code} | Response: {response.text}")
-
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Request failed: {str(e)}")
-                continue
-
-        # 7. إذا فشلت جميع المحاولات
-        update.message.reply_text("❌ تعذر استنساخ الصوت. الرجاء المحاولة لاحقاً أو مراجعة الدعم الفني.")
-        logger.critical(f"All consent attempts failed for user {user_id}")
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        update.message.reply_text("❌ حدث خطأ غير متوقع")
 
     except Exception as e:
         logger.error(f"Critical error: {str(e)}", exc_info=True)
