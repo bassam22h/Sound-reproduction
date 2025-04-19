@@ -35,18 +35,33 @@ def handle_audio(update, context):
         tg_file = bot.get_file(file.file_id)
         audio_data = requests.get(tg_file.file_path).content
 
-        response = requests.post(
-            'https://api.sws.speechify.com/v1/voices',
-            headers={'Authorization': f'Bearer {API_KEY}'},
-            files={'audio': ('voice.ogg', audio_data, 'audio/ogg')},
-            data={'name': f'user_{user_id}_voice', 'consent': 'true'}
-        )
+        # المحاولة بثلاث صيغ مختلفة للموافقة
+        consent_formats = [
+            {"consent": "true"},  # النصيحة 1
+            {"consent": True},    # النصيحة 2
+            {"consent": "1"}      # النصيحة 3
+        ]
 
-        if response.status_code == 200:
-            user_voice_ids[user_id] = response.json()['id']
-            update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
-        else:
-            update.message.reply_text(f"❌ خطأ: {response.text[:200]}")
+        for consent_format in consent_formats:
+            data = {'name': f'user_{user_id}_voice', **consent_format}
+            
+            response = requests.post(
+                'https://api.sws.speechify.com/v1/voices',
+                headers={'Authorization': f'Bearer {API_KEY}'},
+                files={'audio': ('voice.ogg', audio_data, 'audio/ogg')},
+                data=data
+            )
+
+            if response.status_code == 200:
+                voice_id = response.json().get('id')
+                if voice_id:
+                    user_voice_ids[user_id] = voice_id
+                    update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
+                    return
+
+        # إذا فشلت جميع المحاولات
+        error_msg = response.json().get('message', 'تنسيق الموافقة غير مقبول')
+        update.message.reply_text(f"❌ خطأ: {error_msg}")
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")
