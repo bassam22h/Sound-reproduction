@@ -3,7 +3,7 @@ import logging
 import json
 from flask import Flask, request
 from telegram import Bot, Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, filters
+from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackContext
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -35,12 +35,16 @@ API_KEY = os.getenv('SPEECHIFY_API_KEY')
 bot = Bot(token=BOT_TOKEN)
 app = Flask(__name__)
 
+# إنشاء Updater مرة واحدة بدلاً من إنشائه في كل طلب
+updater = Updater(bot=bot)
+dp = updater.dispatcher
+
 user_voice_ids = {}
 
-def start(update, context):
+def start(update: Update, context: CallbackContext):
     update.message.reply_text("مرحباً! أرسل مقطعاً صوتياً لاستنساخ صوتك.")
 
-def handle_audio(update, context):
+def handle_audio(update: Update, context: CallbackContext):
     try:
         user_id = update.message.from_user.id
         file = update.message.voice or update.message.audio
@@ -85,7 +89,7 @@ def handle_audio(update, context):
         logger.error(f"Error: {str(e)}")
         update.message.reply_text("❌ حدث خطأ غير متوقع")
 
-def handle_text(update, context):
+def handle_text(update: Update, context: CallbackContext):
     try:
         user_id = update.message.from_user.id
         text = update.message.text
@@ -130,14 +134,14 @@ def handle_text(update, context):
         logger.error(f"Error: {str(e)}")
         update.message.reply_text("❌ حدث خطأ غير متوقع")
 
+# إضافة handlers مرة واحدة عند بدء التشغيل
+dp.add_handler(CommandHandler("start", start))
+dp.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_audio))
+dp.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-    updater = Updater(bot=bot, use_context=True)
-    dp = updater.dispatcher
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_audio))
-    dp.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     dp.process_update(update)
     return 'ok'
 
