@@ -1,6 +1,8 @@
 python-telegram-bot==13.7
 Flask==2.0.3
 Werkzeug==2.0.3
-requests==2.26.0
-gunicorn==20.1.0
+requests==2.31.0  # تم الترقية للإصدار الأحدث
+gunicorn==21.2.0  # إصدار أحدث مستقر
 urllib3==1.26.15
+pydub==0.25.1     # لإمكانية معالجة الصوت
+ffmpeg-python==0.2.0  # كتبعية لـ pydub
