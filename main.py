@@ -35,7 +35,7 @@ API_KEY = os.getenv('SPEECHIFY_API_KEY')
 bot = Bot(token=BOT_TOKEN)
 app = Flask(__name__)
 
-# إنشاء Application بدلاً من Updater
+# إنشاء Application
 application = Application.builder().token(BOT_TOKEN).build()
 
 user_voice_ids = {}
@@ -53,7 +53,7 @@ async def handle_audio(update: Update, context: CallbackContext):
             return
 
         tg_file = await bot.get_file(file.file_id)
-        audio_data = await session.get(tg_file.file_path, timeout=10).content
+        audio_data = (await session.get(tg_file.file_path, timeout=10)).content
 
         consent_data = {
             "fullName": f"User_{user_id}",
@@ -69,7 +69,7 @@ async def handle_audio(update: Update, context: CallbackContext):
         }
         files = {'sample': ('voice.ogg', audio_data, 'audio/ogg')}
 
-        response = await session.post(
+        response = session.post(
             'https://api.sws.speechify.com/v1/voices',
             headers=headers,
             data=data,
@@ -113,7 +113,7 @@ async def handle_text(update: Update, context: CallbackContext):
             "output_format": "mp3"
         }
 
-        response = await session.post(
+        response = session.post(
             'https://api.sws.speechify.com/v1/audio/speech',
             headers=headers,
             json=payload,
@@ -140,9 +140,14 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_t
 
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
 async def webhook():
-    update = Update.de_json(await request.get_json(force=True), bot)
-    await application.process_update(update)
+    json_data = await request.get_json()
+    update = Update.de_json(json_data, bot)
+    await application.update_queue.put(update)
     return 'ok'
+
+@app.route('/')
+def index():
+    return 'Bot is running!'
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
