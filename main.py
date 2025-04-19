@@ -38,20 +38,20 @@ def handle_audio(update, context):
         tg_file = bot.get_file(file.file_id)
         audio_data = requests.get(tg_file.file_path).content
 
-        # إعداد بيانات الطلب - التركيز هنا على معلمة consent
+        # إعداد الطلب مع التركيز على معلمة consent
         headers = {
             'Authorization': f'Bearer {API_KEY}',
             'Accept': 'application/json'
         }
 
-        files = {
-            'audio': ('voice.ogg', audio_data, 'audio/ogg')
-        }
-
-        # المحاولة الأولى: إرسال consent كقيمة بولينية (True/False)
+        # الحل الجديد: إرسال consent كـ "1" أو "yes" بدلاً من true/True
         data = {
             'name': f'user_{user_id}_voice',
-            'consent': True  # تغيير هنا من 'true' إلى True (قيمة بولينية)
+            'consent': "yes"  # التغيير الرئيسي هنا
+        }
+
+        files = {
+            'audio': ('voice.ogg', audio_data, 'audio/ogg')
         }
 
         response = requests.post(
@@ -60,16 +60,6 @@ def handle_audio(update, context):
             files=files,
             data=data
         )
-
-        # إذا فشلت المحاولة الأولى (400/422)، نجرب إرسال consent كنص
-        if response.status_code in [400, 422]:
-            data['consent'] = 'true'  # إرسالها كنص
-            response = requests.post(
-                'https://api.sws.speechify.com/v1/voices',
-                headers=headers,
-                files=files,
-                data=data
-            )
 
         logger.info(f"API Response: {response.status_code} - {response.text}")
 
@@ -83,7 +73,9 @@ def handle_audio(update, context):
         else:
             error_msg = f"خطأ في الخادم: {response.status_code}"
             try:
-                error_msg = response.json().get('message', error_msg)
+                error_details = response.json()
+                error_msg = error_details.get('message', 
+                             error_details.get('error', str(error_details)))
             except:
                 error_msg = response.text[:200] or error_msg
             update.message.reply_text(f"❌ {error_msg}")
@@ -91,7 +83,6 @@ def handle_audio(update, context):
     except Exception as e:
         logger.error(f"Error in handle_audio: {str(e)}", exc_info=True)
         update.message.reply_text("❌ حدث خطأ غير متوقع أثناء معالجة طلبك.")
-
 def handle_text(update, context):
     try:
         user_id = update.message.from_user.id
