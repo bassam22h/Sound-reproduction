@@ -70,7 +70,7 @@ def handle_audio(update, context):
         # إعداد بيانات الموافقة الافتراضية (وهمية)
         consent_data = {
             "fullName": f"Telegram_User_{user_id}",  # اسم وهمي
-            "email": f"user_{user_id}@speechify.dummy"  # بريد وهمي
+            "email": f"user_{user_id}@speechify.dummy"  # بريد وهمي متوافق مع الشروط
         }
 
         # إعداد الطلب
@@ -81,7 +81,7 @@ def handle_audio(update, context):
 
         data = {
             'name': f'user_{user_id}_voice',
-            'gender': 'male',  # يمكن تغييره إلى 'female' أو 'notSpecified'
+            'gender': 'male',  # أو 'female' أو 'notSpecified'
             'locale': 'ar-SA',  # كود اللغة العربية
             'consent': json.dumps(consent_data)  # تحويل الـ JSON إلى string
         }
@@ -138,4 +138,5 @@ def webhook():
     return 'ok'
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
