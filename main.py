@@ -127,10 +127,10 @@ def handle_audio(update, context):
 def handle_text(update, context):
     try:
         user_id = update.message.from_user.id
-        text = update.message.text
+        text = update.message.text.strip()
 
-        if not text or len(text) > 200:
-            update.message.reply_text("الرجاء إرسال نص صالح (200 حرف كحد أقصى).")
+        if not text or len(text) > 500:  # زيادة الحد إلى 500 حرف
+            update.message.reply_text("الرجاء إرسال نص صالح (500 حرف كحد أقصى).")
             return
 
         voice_id = user_voice_ids.get(user_id)
@@ -143,32 +143,38 @@ def handle_text(update, context):
             'Content-Type': 'application/json'
         }
 
+        # التعديل الرئيسي هنا: تغيير هيكل الطلب حسب وثائق API
         payload = {
-            'voice_id': voice_id,
-            'text': text,
-            'output_format': 'mp3'
+            'input': {  # الحقل المطلوب حسب السجلات
+                'text': text,
+                'voice_id': voice_id,
+                'output_format': 'mp3'
+            }
         }
+
+        logger.info(f"إرسال طلب تحويل النص: {payload}")
 
         response = session.post(
             'https://api.sws.speechify.com/v1/audio/speech',
             headers=headers,
             json=payload,
-            timeout=25
+            timeout=30
         )
-        logger.info(f"استجابة تحويل النص: {response.status_code}")
+
+        logger.info(f"استجابة تحويل النص: {response.status_code} - {response.text}")
 
         if response.status_code == 200:
             try:
                 response_data = response.json()
-                audio_url = response_data.get('url')
-                if audio_url:
-                    update.message.reply_voice(audio_url)
-                    logger.info(f"تم إرسال الصوت للمستخدم {user_id}")
+                if 'url' in response_data:
+                    update.message.reply_voice(response_data['url'])
+                elif 'audio_url' in response_data:  # بعض APIs تستخدم تسميات مختلفة
+                    update.message.reply_voice(response_data['audio_url'])
                 else:
                     logger.error("لا يوجد رابط صوت في الاستجابة")
                     update.message.reply_text("❌ لم يتم إنشاء الصوت")
-            except ValueError:
-                logger.error("استجابة JSON غير صالحة")
+            except ValueError as e:
+                logger.error(f"خطأ في تحليل JSON: {str(e)}")
                 update.message.reply_text("❌ خطأ في معالجة الاستجابة")
         else:
             error_msg = response.text[:200] if response.text else f"خطأ {response.status_code}"
