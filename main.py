@@ -40,7 +40,7 @@ user_voice_ids = {}
 def start(update, context):
     update.message.reply_text(
         "مرحباً! أرسل مقطعاً صوتياً (10-30 ثانية) لاستنساخ صوتك.\n"
-        "⚠️ سيتم استخدام صوتك وفق شروط الخدمة"
+        "⚠️ سيتم استخدام بيانات وهمية للاختبار"
     )
 
 def handle_audio(update, context):
@@ -67,13 +67,13 @@ def handle_audio(update, context):
             update.message.reply_text("❌ فشل تحميل الملف الصوتي")
             return
 
-        # إعداد بيانات الموافقة حسب الوثائق
+        # إعداد بيانات الموافقة الافتراضية (وهمية)
         consent_data = {
-            "fullName": f"User_{user_id}",  # يمكن استبداله باسم المستخدم الحقيقي
-            "email": f"user_{user_id}@bot.com"  # يمكن استبداله بإيميل المستخدم
+            "fullName": f"Telegram_User_{user_id}",  # اسم وهمي
+            "email": f"user_{user_id}@speechify.dummy"  # بريد وهمي
         }
 
-        # إعداد الطلب حسب الوثائق الرسمية
+        # إعداد الطلب
         headers = {
             'Authorization': f'Bearer {API_KEY}',
             'Accept': 'application/json'
@@ -81,13 +81,13 @@ def handle_audio(update, context):
 
         data = {
             'name': f'user_{user_id}_voice',
-            'gender': 'male',  # أو 'female' أو 'notSpecified'
-            'locale': 'ar-SA',  # كود اللغة (ar-SA للعربية)
-            'consent': json.dumps(consent_data)  # يجب أن يكون JSON string
+            'gender': 'male',  # يمكن تغييره إلى 'female' أو 'notSpecified'
+            'locale': 'ar-SA',  # كود اللغة العربية
+            'consent': json.dumps(consent_data)  # تحويل الـ JSON إلى string
         }
 
         files = {
-            'sample': ('voice.ogg', audio_data, 'audio/ogg')  # المفتاح يجب أن يكون 'sample' كما في الوثائق
+            'sample': ('voice.ogg', audio_data, 'audio/ogg')  # المفتاح يجب أن يكون 'sample'
         }
 
         # إرسال الطلب
