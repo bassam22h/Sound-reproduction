@@ -1,5 +1,6 @@
 python-telegram-bot==13.7
 Flask==2.0.3
+Werkzeug==2.0.3  # هذا الإصدار يتوافق مع Flask 2.0.3
 requests==2.31.0
 urllib3==1.26.15
-gunicorn==21.2.0
+gunicorn==20.1.0  # إصدار أثبت ثباته
