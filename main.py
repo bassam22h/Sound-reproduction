@@ -44,22 +44,22 @@ def handle_audio(update, context):
             'Accept': 'application/json'
         }
 
-        # الحل الجديد: إرسال consent كـ "1" أو "yes" بدلاً من true/True
-        
+        # إرسال consent كقيمة نصية "true"
         data = {
-    'name': f'user_{user_id}_voice',
-    'consent': "true"  # أو جرب "1" أو "yes"
-}
+            'name': f'user_{user_id}_voice',
+            'consent': "true"
+        }
 
-# أو جرب إرسالها كـ JSON بدلاً من form-data
-response = requests.post(
-    'https://api.sws.speechify.com/v1/voices',
-    headers=headers,
-    files={'audio': ('voice.ogg', audio_data)},
-    data=data,
-    # أو جرب:
-    # json={'name': data['name'], 'consent': data['consent'], 'audio': audio_data}
-)
+        files = {
+            'audio': ('voice.ogg', audio_data, 'audio/ogg')
+        }
+
+        response = requests.post(
+            'https://api.sws.speechify.com/v1/voices',
+            headers=headers,
+            files=files,
+            data=data
+        )
 
         logger.info(f"API Response: {response.status_code} - {response.text}")
 
@@ -83,6 +83,7 @@ response = requests.post(
     except Exception as e:
         logger.error(f"Error in handle_audio: {str(e)}", exc_info=True)
         update.message.reply_text("❌ حدث خطأ غير متوقع أثناء معالجة طلبك.")
+
 def handle_text(update, context):
     try:
         user_id = update.message.from_user.id
@@ -144,10 +145,5 @@ def webhook():
     return 'ok'
 
 if __name__ == '__main__':
-    # تأكد من أن المتغيرات البيئية مضبوطة
-    if not all([BOT_TOKEN, API_KEY]):
-        logger.error("❌ المفاتيح المطلوبة غير مضبوطة!")
-        exit(1)
-        
-    logger.info("✅ بدء تشغيل البوت...")
+    # للاستخدام المحلي فقط
     app.run(host="0.0.0.0", port=10000)
