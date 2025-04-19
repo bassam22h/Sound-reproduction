@@ -50,47 +50,64 @@ def handle_audio(update, context):
         file = update.message.voice or update.message.audio
         
         if not file:
-            context.bot.send_message(chat_id=update.effective_chat.id, text="الرجاء إرسال مقطع صوتي فقط.")
+            context.bot.send_message(chat_id=update.effective_chat.id, 
+                                    text="الرجاء إرسال مقطع صوتي فقط (بين 10-30 ثانية).")
             return
 
+        # الحصول على الملف الصوتي
         tg_file = context.bot.get_file(file.file_id)
         audio_data = session.get(tg_file.file_path, timeout=10).content
 
+        # تحضير بيانات الموافقة
         consent_data = {
             "fullName": f"User_{user_id}",
             "email": f"user_{user_id}@bot.com"
         }
 
-        headers = {'Authorization': f'Bearer {API_KEY}'}
+        # تحضير البيانات للطلب
         data = {
             'name': f'user_{user_id}_voice',
-            'gender': 'male',
-            'locale': 'ar-SA',
-            'consent': json.dumps(consent_data)
-        }
-        files = {
-            'sample': ('voice.ogg', audio_data, 'audio/ogg'),
-            'input': (None, json.dumps(data), 'application/json')
+            'gender': 'male',  # أو 'female' أو 'unspecified' حسب الرغبة
+            'locale': 'ar-SA',  # تغيير حسب اللغة المطلوبة
+            'consent': json.dumps(consent_data, ensure_ascii=False)
         }
 
+        # تحضير الملفات للطلب
+        files = {
+            'sample': ('voice_sample.ogg', audio_data, 'audio/ogg'),
+        }
+
+        # إضافة البيانات كجزء من multipart form-data
+        for key, value in data.items():
+            files[key] = (None, str(value))
+
+        # إرسال الطلب إلى API
         response = session.post(
             'https://api.sws.speechify.com/v1/voices',
-            headers=headers,
+            headers={'Authorization': f'Bearer {API_KEY}'},
             files=files,
             timeout=15
         )
 
+        # معالجة الرد
         if response.status_code == 200:
             voice_id = response.json().get('id')
             user_voice_ids[user_id] = voice_id
-            context.bot.send_message(chat_id=update.effective_chat.id, text="✅ تم استنساخ صوتك بنجاح!")
+            context.bot.send_message(chat_id=update.effective_chat.id, 
+                                   text="✅ تم استنساخ صوتك بنجاح! يمكنك الآن إرسال النص لتحويله إلى صوت.")
         else:
             error_msg = response.json().get('message', 'Unknown error')
-            context.bot.send_message(chat_id=update.effective_chat.id, text=f"❌ خطأ في API: {error_msg}")
+            context.bot.send_message(chat_id=update.effective_chat.id, 
+                                   text=f"❌ خطأ في API: {error_msg}")
 
+    except json.JSONDecodeError:
+        logger.error("Failed to decode JSON response")
+        context.bot.send_message(chat_id=update.effective_chat.id, 
+                               text="❌ حدث خطأ في معالجة الرد من الخادم")
     except Exception as e:
         logger.error(f"Error in handle_audio: {str(e)}")
-        context.bot.send_message(chat_id=update.effective_chat.id, text="❌ حدث خطأ غير متوقع أثناء معالجة الصوت")
+        context.bot.send_message(chat_id=update.effective_chat.id, 
+                               text="❌ حدث خطأ غير متوقع أثناء معالجة الصوت")
 
 def handle_text(update, context):
     try:
@@ -98,46 +115,52 @@ def handle_text(update, context):
         text = update.message.text
 
         if not text or len(text) > 500:
-            context.bot.send_message(chat_id=update.effective_chat.id, text="الرجاء إرسال نص صالح (500 حرف كحد أقصى).")
+            context.bot.send_message(chat_id=update.effective_chat.id, 
+                                   text="الرجاء إرسال نص صالح (بين 1-500 حرف).")
             return
 
         voice_id = user_voice_ids.get(user_id)
         if not voice_id:
-            context.bot.send_message(chat_id=update.effective_chat.id, text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي.")
+            context.bot.send_message(chat_id=update.effective_chat.id, 
+                                   text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).")
             return
 
-        headers = {
-            'Authorization': f'Bearer {API_KEY}',
-            'Content-Type': 'application/json'
-        }
-
+        # تحضير بيانات الطلب
         payload = {
             "text": text,
-            "voiceId": voice_id,  # تغيير من voice_id إلى voiceId حسب ما تتوقعه API
-            "outputFormat": "mp3"  # تغيير من output_format إلى outputFormat
+            "voiceId": voice_id,
+            "outputFormat": "mp3"
         }
 
+        # إرسال الطلب إلى API
         response = session.post(
             'https://api.sws.speechify.com/v1/audio/speech',
-            headers=headers,
+            headers={
+                'Authorization': f'Bearer {API_KEY}',
+                'Content-Type': 'application/json'
+            },
             json=payload,
             timeout=25
         )
 
+        # معالجة الرد
         if response.status_code == 200:
             result = response.json()
             audio_url = result.get('url')
             if audio_url:
                 context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio_url)
             else:
-                context.bot.send_message(chat_id=update.effective_chat.id, text="❌ لم يتم إنشاء الصوت")
+                context.bot.send_message(chat_id=update.effective_chat.id, 
+                                       text="❌ لم يتم إنشاء الصوت، يرجى المحاولة لاحقاً")
         else:
             error_msg = response.json().get('message', response.text)
-            context.bot.send_message(chat_id=update.effective_chat.id, text=f"❌ خطأ في تحويل النص: {error_msg}")
+            context.bot.send_message(chat_id=update.effective_chat.id, 
+                                   text=f"❌ خطأ في تحويل النص: {error_msg}")
 
     except Exception as e:
         logger.error(f"Error in handle_text: {str(e)}")
-        context.bot.send_message(chat_id=update.effective_chat.id, text="❌ حدث خطأ غير متوقع أثناء معالجة النص")
+        context.bot.send_message(chat_id=update.effective_chat.id, 
+                               text="❌ حدث خطأ غير متوقع أثناء معالجة النص")
 # إضافة handlers
 dp.add_handler(CommandHandler("start", start))
 dp.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
