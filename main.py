@@ -32,40 +32,63 @@ def handle_audio(update, context):
             update.message.reply_text("الرجاء إرسال مقطع صوتي فقط.")
             return
 
+        # 1. تحميل الملف الصوتي
         tg_file = bot.get_file(file.file_id)
-        audio_data = requests.get(tg_file.file_path).content
+        audio_data = requests.get(tg_file.file_path, timeout=10).content
 
-        # المحاولة بثلاث صيغ مختلفة للموافقة
-        consent_formats = [
-            {"consent": "true"},  # النصيحة 1
-            {"consent": True},    # النصيحة 2
-            {"consent": "1"}      # النصيحة 3
+        # 2. إعداد الطلب مع تحسينات حاسمة
+        headers = {
+            'Authorization': f'Bearer {API_KEY}',
+            'Accept': 'application/json',
+            'Content-Type': 'multipart/form-data'
+        }
+
+        # 3. جميع الصيغ الممكنة للموافقة
+        consent_attempts = [
+            {'consent': 'true', 'consent_type': 'recording'},  # الصيغة الأكثر شيوعاً
+            {'consent': '1', 'consent_verified': 'yes'},
+            {'consent': 'accepted'},
+            {'consent': 'yes', 'agree_to_terms': 'true'}
         ]
 
-        for consent_format in consent_formats:
-            data = {'name': f'user_{user_id}_voice', **consent_format}
+        for attempt in consent_attempts:
+            data = {'name': f'user_{user_id}_voice', **attempt}
             
-            response = requests.post(
-                'https://api.sws.speechify.com/v1/voices',
-                headers={'Authorization': f'Bearer {API_KEY}'},
-                files={'audio': ('voice.ogg', audio_data, 'audio/ogg')},
-                data=data
-            )
+            try:
+                # 4. إرسال الطلب مع التحكم الكامل
+                response = requests.post(
+                    'https://api.sws.speechify.com/v1/voices',
+                    headers=headers,
+                    files={'audio': ('voice_recording.ogg', audio_data, 'audio/ogg')},
+                    data=data,
+                    timeout=15
+                )
 
-            if response.status_code == 200:
-                voice_id = response.json().get('id')
-                if voice_id:
-                    user_voice_ids[user_id] = voice_id
-                    update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
-                    return
+                # 5. تحليل الاستجابة بشكل أقوى
+                if response.status_code == 200:
+                    try:
+                        response_data = response.json()
+                        if 'id' in response_data:
+                            user_voice_ids[user_id] = response_data['id']
+                            update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
+                            return
+                    except ValueError:
+                        continue
 
-        # إذا فشلت جميع المحاولات
-        error_msg = response.json().get('message', 'تنسيق الموافقة غير مقبول')
-        update.message.reply_text(f"❌ خطأ: {error_msg}")
+                # 6. تسجيل تفاصيل الخطأ
+                logger.error(f"Attempt failed: {attempt} | Status: {response.status_code} | Response: {response.text}")
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Request failed: {str(e)}")
+                continue
+
+        # 7. إذا فشلت جميع المحاولات
+        update.message.reply_text("❌ تعذر استنساخ الصوت. الرجاء المحاولة لاحقاً أو مراجعة الدعم الفني.")
+        logger.critical(f"All consent attempts failed for user {user_id}")
 
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        update.message.reply_text("❌ حدث خطأ غير متوقع")
+        logger.error(f"Critical error: {str(e)}", exc_info=True)
+        update.message.reply_text("❌ حدث خطأ غير متوقع في النظام.")
 
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
 def webhook():
