@@ -45,8 +45,7 @@ def handle_audio(update, context):
         }
 
         # الحل الجديد: إرسال consent كـ "1" أو "yes" بدلاً من true/True
-        data = {
-            'name': f'user_{user_id}_voice',
+        
         data = {
     'name': f'user_{user_id}_voice',
     'consent': "true"  # أو جرب "1" أو "yes"
