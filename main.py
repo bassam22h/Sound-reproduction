@@ -2,7 +2,7 @@ import os
 import logging
 from flask import Flask, request
 from telegram import Bot, Update
-from telegram.ext import Dispatcher, CommandHandler, MessageHandler, Filters
+from telegram.ext import Dispatcher, CommandHandler, MessageHandler, filters
 import requests
 
 # إعداد التسجيل
@@ -38,21 +38,13 @@ def handle_audio(update, context):
         tg_file = bot.get_file(file.file_id)
         audio_data = requests.get(tg_file.file_path).content
 
-        # إعداد الطلب مع التركيز على معلمة consent
         headers = {
             'Authorization': f'Bearer {API_KEY}',
             'Accept': 'application/json'
         }
 
-        # إرسال consent كقيمة نصية "true"
-        data = {
-            'name': f'user_{user_id}_voice',
-            'consent': "true"
-        }
-
-        files = {
-            'audio': ('voice.ogg', audio_data, 'audio/ogg')
-        }
+        data = {'name': f'user_{user_id}_voice', 'consent': "true"}
+        files = {'audio': ('voice.ogg', audio_data, 'audio/ogg')}
 
         response = requests.post(
             'https://api.sws.speechify.com/v1/voices',
@@ -71,13 +63,7 @@ def handle_audio(update, context):
             else:
                 update.message.reply_text("❌ لم يتم الحصول على معرف الصوت من الاستجابة.")
         else:
-            error_msg = f"خطأ في الخادم: {response.status_code}"
-            try:
-                error_details = response.json()
-                error_msg = error_details.get('message', 
-                             error_details.get('error', str(error_details)))
-            except:
-                error_msg = response.text[:200] or error_msg
+            error_msg = response.text[:200] if response.text else f"خطأ {response.status_code}"
             update.message.reply_text(f"❌ {error_msg}")
 
     except Exception as e:
@@ -122,11 +108,7 @@ def handle_text(update, context):
             else:
                 update.message.reply_text("❌ لم يتم الحصول على رابط الصوت من الاستجابة.")
         else:
-            error_msg = f"خطأ في الخادم: {response.status_code}"
-            try:
-                error_msg = response.json().get('message', error_msg)
-            except:
-                error_msg = response.text[:200] or error_msg
+            error_msg = response.text[:200] if response.text else f"خطأ {response.status_code}"
             update.message.reply_text(f"❌ {error_msg}")
 
     except Exception as e:
@@ -135,15 +117,14 @@ def handle_text(update, context):
 
 # إعداد المعالجات
 dispatcher.add_handler(CommandHandler("start", start))
-dispatcher.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
-dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
+dispatcher.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_audio))
+dispatcher.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
-@app.route(f'/{BOT_TOKEN}', methods=['POST'])
+@app.post(f'/{BOT_TOKEN}')
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
     dispatcher.process_update(update)
     return 'ok'
 
 if __name__ == '__main__':
-    # للاستخدام المحلي فقط
     app.run(host="0.0.0.0", port=10000)
