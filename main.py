@@ -53,7 +53,7 @@ def handle_audio(update, context):
             context.bot.send_message(chat_id=update.effective_chat.id, text="الرجاء إرسال مقطع صوتي فقط.")
             return
 
-        tg_file = bot.get_file(file.file_id)
+        tg_file = context.bot.get_file(file.file_id)
         audio_data = session.get(tg_file.file_path, timeout=10).content
 
         consent_data = {
@@ -68,12 +68,14 @@ def handle_audio(update, context):
             'locale': 'ar-SA',
             'consent': json.dumps(consent_data)
         }
-        files = {'sample': ('voice.ogg', audio_data, 'audio/ogg')}
+        files = {
+            'sample': ('voice.ogg', audio_data, 'audio/ogg'),
+            'input': (None, json.dumps(data), 'application/json')
+        }
 
         response = session.post(
             'https://api.sws.speechify.com/v1/voices',
             headers=headers,
-            data=data,
             files=files,
             timeout=15
         )
@@ -83,11 +85,12 @@ def handle_audio(update, context):
             user_voice_ids[user_id] = voice_id
             context.bot.send_message(chat_id=update.effective_chat.id, text="✅ تم استنساخ صوتك بنجاح!")
         else:
-            context.bot.send_message(chat_id=update.effective_chat.id, text=f"❌ خطأ: {response.text}")
+            error_msg = response.json().get('message', 'Unknown error')
+            context.bot.send_message(chat_id=update.effective_chat.id, text=f"❌ خطأ في API: {error_msg}")
 
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        context.bot.send_message(chat_id=update.effective_chat.id, text="❌ حدث خطأ غير متوقع")
+        logger.error(f"Error in handle_audio: {str(e)}")
+        context.bot.send_message(chat_id=update.effective_chat.id, text="❌ حدث خطأ غير متوقع أثناء معالجة الصوت")
 
 def handle_text(update, context):
     try:
@@ -100,7 +103,7 @@ def handle_text(update, context):
 
         voice_id = user_voice_ids.get(user_id)
         if not voice_id:
-            context.bot.send_message(chat_id=update.effective_chat.id, text="❌ يرجى استنساخ صوتك أولاً.")
+            context.bot.send_message(chat_id=update.effective_chat.id, text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي.")
             return
 
         headers = {
@@ -110,8 +113,8 @@ def handle_text(update, context):
 
         payload = {
             "text": text,
-            "voice_id": voice_id,
-            "output_format": "mp3"
+            "voiceId": voice_id,  # تغيير من voice_id إلى voiceId حسب ما تتوقعه API
+            "outputFormat": "mp3"  # تغيير من output_format إلى outputFormat
         }
 
         response = session.post(
@@ -122,18 +125,19 @@ def handle_text(update, context):
         )
 
         if response.status_code == 200:
-            audio_url = response.json().get('url')
+            result = response.json()
+            audio_url = result.get('url')
             if audio_url:
                 context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio_url)
             else:
                 context.bot.send_message(chat_id=update.effective_chat.id, text="❌ لم يتم إنشاء الصوت")
         else:
-            context.bot.send_message(chat_id=update.effective_chat.id, text=f"❌ خطأ: {response.text}")
+            error_msg = response.json().get('message', response.text)
+            context.bot.send_message(chat_id=update.effective_chat.id, text=f"❌ خطأ في تحويل النص: {error_msg}")
 
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        context.bot.send_message(chat_id=update.effective_chat.id, text="❌ حدث خطأ غير متوقع")
-
+        logger.error(f"Error in handle_text: {str(e)}")
+        context.bot.send_message(chat_id=update.effective_chat.id, text="❌ حدث خطأ غير متوقع أثناء معالجة النص")
 # إضافة handlers
 dp.add_handler(CommandHandler("start", start))
 dp.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
