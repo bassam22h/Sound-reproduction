@@ -69,8 +69,8 @@ def handle_audio(update, context):
 
         # إعداد بيانات الموافقة الافتراضية (وهمية)
         consent_data = {
-            "fullName": f"Telegram_User_{user_id}",  # اسم وهمي
-            "email": f"user_{user_id}@speechify.dummy"  # بريد وهمي متوافق مع الشروط
+            "fullName": f"Telegram_User_{user_id}",
+            "email": f"user_{user_id}@speechify.dummy"
         }
 
         # إعداد الطلب
@@ -81,13 +81,13 @@ def handle_audio(update, context):
 
         data = {
             'name': f'user_{user_id}_voice',
-            'gender': 'male',  # أو 'female' أو 'notSpecified'
-            'locale': 'ar-SA',  # كود اللغة العربية
-            'consent': json.dumps(consent_data)  # تحويل الـ JSON إلى string
+            'gender': 'male',
+            'locale': 'ar-SA',
+            'consent': json.dumps(consent_data)
         }
 
         files = {
-            'sample': ('voice.ogg', audio_data, 'audio/ogg')  # المفتاح يجب أن يكون 'sample'
+            'sample': ('voice.ogg', audio_data, 'audio/ogg')
         }
 
         # إرسال الطلب
@@ -100,40 +100,28 @@ def handle_audio(update, context):
                 timeout=15
             )
 
-            # معالجة الاستجابة
             if response.status_code == 200:
-                try:
-                    response_data = response.json()
-                    if 'id' in response_data:
-                        user_voice_ids[user_id] = response_data['id']
-                        update.message.reply_text("✅ تم استنساخ صوتك بنجاح! أرسل الآن النص لتحويله إلى صوت.")
-                        return
-                    else:
-                        logger.error("لا يوجد معرف صوت في الاستجابة")
-                except ValueError:
-                    logger.error("استجابة JSON غير صالحة")
-            
-            logger.error(f"خطأ API: {response.status_code} - {response.text}")
-            update.message.reply_text("❌ فشل في معالجة الصوت. الرجاء المحاولة لاحقاً")
+                voice_id = response.json().get('id')
+                user_voice_ids[user_id] = voice_id
+                update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
+            else:
+                update.message.reply_text(f"❌ خطأ: {response.text}")
 
         except requests.exceptions.RequestException as e:
             logger.error(f"فشل الاتصال: {str(e)}")
             update.message.reply_text("❌ فشل الاتصال بالخادم")
 
     except Exception as e:
-        logger.error(f"خطأ غير متوقع: {str(e)}", exc_info=True)
+        logger.error(f"خطأ غير متوقع: {str(e)}")
         update.message.reply_text("❌ حدث خطأ غير متوقع")
 
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
     updater = Updater(bot=bot, use_context=True)
-    
-    # إضافة المعالجات
     dp = updater.dispatcher
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
-    
     dp.process_update(update)
     return 'ok'
 
