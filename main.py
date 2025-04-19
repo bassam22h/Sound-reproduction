@@ -3,7 +3,7 @@ import logging
 import json
 from flask import Flask, request
 from telegram import Bot, Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackContext
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -35,26 +35,25 @@ API_KEY = os.getenv('SPEECHIFY_API_KEY')
 bot = Bot(token=BOT_TOKEN)
 app = Flask(__name__)
 
-# إنشاء Updater مرة واحدة بدلاً من إنشائه في كل طلب
-updater = Updater(bot=bot)
-dp = updater.dispatcher
+# إنشاء Application بدلاً من Updater
+application = Application.builder().token(BOT_TOKEN).build()
 
 user_voice_ids = {}
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("مرحباً! أرسل مقطعاً صوتياً لاستنساخ صوتك.")
+async def start(update: Update, context: CallbackContext):
+    await update.message.reply_text("مرحباً! أرسل مقطعاً صوتياً لاستنساخ صوتك.")
 
-def handle_audio(update: Update, context: CallbackContext):
+async def handle_audio(update: Update, context: CallbackContext):
     try:
         user_id = update.message.from_user.id
         file = update.message.voice or update.message.audio
         
         if not file:
-            update.message.reply_text("الرجاء إرسال مقطع صوتي فقط.")
+            await update.message.reply_text("الرجاء إرسال مقطع صوتي فقط.")
             return
 
-        tg_file = bot.get_file(file.file_id)
-        audio_data = session.get(tg_file.file_path, timeout=10).content
+        tg_file = await bot.get_file(file.file_id)
+        audio_data = await session.get(tg_file.file_path, timeout=10).content
 
         consent_data = {
             "fullName": f"User_{user_id}",
@@ -70,7 +69,7 @@ def handle_audio(update: Update, context: CallbackContext):
         }
         files = {'sample': ('voice.ogg', audio_data, 'audio/ogg')}
 
-        response = session.post(
+        response = await session.post(
             'https://api.sws.speechify.com/v1/voices',
             headers=headers,
             data=data,
@@ -81,26 +80,26 @@ def handle_audio(update: Update, context: CallbackContext):
         if response.status_code == 200:
             voice_id = response.json().get('id')
             user_voice_ids[user_id] = voice_id
-            update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
+            await update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
         else:
-            update.message.reply_text(f"❌ خطأ: {response.text}")
+            await update.message.reply_text(f"❌ خطأ: {response.text}")
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")
-        update.message.reply_text("❌ حدث خطأ غير متوقع")
+        await update.message.reply_text("❌ حدث خطأ غير متوقع")
 
-def handle_text(update: Update, context: CallbackContext):
+async def handle_text(update: Update, context: CallbackContext):
     try:
         user_id = update.message.from_user.id
         text = update.message.text
 
         if not text or len(text) > 500:
-            update.message.reply_text("الرجاء إرسال نص صالح (500 حرف كحد أقصى).")
+            await update.message.reply_text("الرجاء إرسال نص صالح (500 حرف كحد أقصى).")
             return
 
         voice_id = user_voice_ids.get(user_id)
         if not voice_id:
-            update.message.reply_text("❌ يرجى استنساخ صوتك أولاً.")
+            await update.message.reply_text("❌ يرجى استنساخ صوتك أولاً.")
             return
 
         headers = {
@@ -114,7 +113,7 @@ def handle_text(update: Update, context: CallbackContext):
             "output_format": "mp3"
         }
 
-        response = session.post(
+        response = await session.post(
             'https://api.sws.speechify.com/v1/audio/speech',
             headers=headers,
             json=payload,
@@ -124,25 +123,25 @@ def handle_text(update: Update, context: CallbackContext):
         if response.status_code == 200:
             audio_url = response.json().get('url')
             if audio_url:
-                update.message.reply_voice(audio_url)
+                await update.message.reply_voice(audio_url)
             else:
-                update.message.reply_text("❌ لم يتم إنشاء الصوت")
+                await update.message.reply_text("❌ لم يتم إنشاء الصوت")
         else:
-            update.message.reply_text(f"❌ خطأ: {response.text}")
+            await update.message.reply_text(f"❌ خطأ: {response.text}")
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")
-        update.message.reply_text("❌ حدث خطأ غير متوقع")
+        await update.message.reply_text("❌ حدث خطأ غير متوقع")
 
-# إضافة handlers مرة واحدة عند بدء التشغيل
-dp.add_handler(CommandHandler("start", start))
-dp.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_audio))
-dp.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+# إضافة handlers
+application.add_handler(CommandHandler("start", start))
+application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_audio))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
-    dp.process_update(update)
+async def webhook():
+    update = Update.de_json(await request.get_json(force=True), bot)
+    await application.process_update(update)
     return 'ok'
 
 if __name__ == '__main__':
