@@ -18,24 +18,22 @@ API_KEY = os.getenv('SPEECHIFY_API_KEY')
 bot = Bot(token=BOT_TOKEN)
 app = Flask(__name__)
 
-# متغير لتخزين voice_id الخاص بكل مستخدم
 user_voice_ids = {}
 
-# أمر /start
 def start(update, context):
-    update.message.reply_text("أهلاً بك! أرسل مقطع صوتي لاستنساخ صوتك، ثم أرسل نص (200 حرف كحد أقصى) لتحويله إلى صوت.")
+    update.message.reply_text("مرحباً! أرسل مقطعاً صوتياً لاستنساخ صوتك.")
 
-# استقبال الصوت للاستنساخ
 def handle_audio(update, context):
-    user_id = update.message.from_user.id
-    file = update.message.voice or update.message.audio
-    if not file:
-        update.message.reply_text("أرسل مقطع صوتي فقط.")
-        return
-
     try:
-        file_path = bot.get_file(file.file_id).file_path
-        audio_data = requests.get(file_path).content
+        user_id = update.message.from_user.id
+        file = update.message.voice or update.message.audio
+        
+        if not file:
+            update.message.reply_text("الرجاء إرسال مقطع صوتي فقط.")
+            return
+
+        tg_file = bot.get_file(file.file_id)
+        audio_data = requests.get(tg_file.file_path).content
 
         response = requests.post(
             'https://api.sws.speechify.com/v1/voices',
@@ -45,68 +43,26 @@ def handle_audio(update, context):
         )
 
         if response.status_code == 200:
-            voice_id = response.json()['id']
-            user_voice_ids[user_id] = voice_id
-            update.message.reply_text("تم استنساخ صوتك بنجاح! أرسل الآن نصاً (200 حرف كحد أقصى).")
+            user_voice_ids[user_id] = response.json()['id']
+            update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
         else:
-            error_msg = response.json().get('message', 'حدث خطأ غير معروف')
-            update.message.reply_text(f"حدث خطأ أثناء استنساخ الصوت: {error_msg}")
+            update.message.reply_text(f"❌ خطأ: {response.text[:200]}")
 
     except Exception as e:
-        logger.error(f"Error in handle_audio: {str(e)}")
-        update.message.reply_text("حدث خطأ أثناء معالجة الملف الصوتي.")
+        logger.error(f"Error: {str(e)}")
+        update.message.reply_text("❌ حدث خطأ غير متوقع")
 
-# استقبال النصوص وتحويلها إلى صوت
-def handle_text(update, context):
-    user_id = update.message.from_user.id
-    text = update.message.text.strip()
-
-    if len(text) > 200:
-        update.message.reply_text("النص طويل جداً. الرجاء إرسال 200 حرف كحد أقصى.")
-        return
-
-    voice_id = user_voice_ids.get(user_id)
-    if not voice_id:
-        update.message.reply_text("أرسل مقطع صوتي أولاً لاستنساخ صوتك.")
-        return
-
-    try:
-        response = requests.post(
-            'https://api.sws.speechify.com/v1/audio/speech',
-            headers={
-                'Authorization': f'Bearer {API_KEY}',
-                'Content-Type': 'application/json'
-            },
-            json={
-                'voice_id': voice_id,
-                'text': text,
-                'output_format': 'mp3'
-            }
-        )
-
-        if response.status_code == 200:
-            audio_url = response.json()['url']
-            update.message.reply_voice(audio_url)
-        else:
-            error_msg = response.json().get('message', 'حدث خطأ غير معروف')
-            update.message.reply_text(f"حدث خطأ أثناء التحويل: {error_msg}")
-
-    except Exception as e:
-        logger.error(f"Error in handle_text: {str(e)}")
-        update.message.reply_text("حدث خطأ أثناء معالجة النص.")
-
-# إعداد Webhook
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
 def webhook():
     update = Update.de_json(request.get_json(force=True), bot)
-    dispatcher = Updater(bot=bot, use_context=True).dispatcher
+    updater = Updater(bot=bot, use_context=True)
     
     # إضافة المعالجات
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
+    dp = updater.dispatcher
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
     
-    dispatcher.process_update(update)
+    dp.process_update(update)
     return 'ok'
 
 if __name__ == '__main__':
