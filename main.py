@@ -1,9 +1,26 @@
 import os
 import logging
+import io
 from flask import Flask, request
 from telegram import Bot, Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+# إعداد اتصالات requests المحسنة
+session = requests.Session()
+retry_strategy = Retry(
+    total=3,
+    backoff_factor=1,
+    status_forcelist=[500, 502, 503, 504]
+)
+adapter = HTTPAdapter(
+    max_retries=retry_strategy,
+    pool_connections=10,
+    pool_maxsize=10
+)
+session.mount("https://", adapter)
 
 # إعداد التسجيل
 logging.basicConfig(
@@ -21,7 +38,7 @@ app = Flask(__name__)
 user_voice_ids = {}
 
 def start(update, context):
-    update.message.reply_text("مرحباً! أرسل مقطعاً صوتياً لاستنساخ صوتك.")
+    update.message.reply_text("مرحباً! أرسل مقطعاً صوتياً (10-30 ثانية، أقل من 5MB) لاستنساخ صوتك.")
 
 def handle_audio(update, context):
     try:
@@ -32,43 +49,41 @@ def handle_audio(update, context):
             update.message.reply_text("الرجاء إرسال مقطع صوتي فقط.")
             return
 
-        # 1. التحقق من حجم الملف قبل التحميل
-        MAX_SIZE_MB = 5  # 5MB كحد أقصى حسب وثائق API
+        # التحقق من حجم الملف
+        MAX_SIZE_MB = 5
         if file.file_size > MAX_SIZE_MB * 1024 * 1024:
             update.message.reply_text(f"❌ حجم الملف كبير جداً. الحد الأقصى {MAX_SIZE_MB}MB")
             return
 
-        # 2. تحميل الملف الصوتي مع التحكم بالوقت
+        # تحميل الملف الصوتي
         try:
             tg_file = bot.get_file(file.file_id)
-            audio_data = requests.get(tg_file.file_path, timeout=10).content
+            audio_data = session.get(tg_file.file_path, timeout=10).content
         except Exception as e:
             logger.error(f"Download failed: {str(e)}")
             update.message.reply_text("❌ فشل تحميل الملف الصوتي")
             return
 
-        # 3. التحقق من حجم البيانات الفعلي
-        if len(audio_data) > 100 * 1024 * 1024:  # 100MB
+        # التحقق من حجم البيانات الفعلي
+        if len(audio_data) > 5 * 1024 * 1024:  # 5MB
             update.message.reply_text("❌ حجم البيانات الفعلي كبير جداً")
             return
 
-        # 4. إعداد الطلب الأمثل
+        # إعداد الطلب
         headers = {
             'Authorization': f'Bearer {API_KEY}',
             'Accept': 'application/json'
         }
 
-        # 5. أفضل صيغة للموافقة (حسب آخر وثائق API)
         data = {
             'name': f'user_{user_id}_voice',
             'consent': 'true',
-            'consent_type': 'audio_recording',
-            'source': 'telegram_bot'
+            'consent_type': 'audio_recording'
         }
 
-        # 6. إرسال الطلب مع التعامل مع الملف بشكل صحيح
+        # إرسال الطلب
         try:
-            response = requests.post(
+            response = session.post(
                 'https://api.sws.speechify.com/v1/voices',
                 headers=headers,
                 files={'audio': ('voice.ogg', audio_data, 'audio/ogg')},
@@ -76,7 +91,7 @@ def handle_audio(update, context):
                 timeout=15
             )
 
-            # 7. معالجة الاستجابة بدقة
+            # معالجة الاستجابة
             if response.status_code == 200:
                 try:
                     response_data = response.json()
@@ -84,10 +99,9 @@ def handle_audio(update, context):
                         user_voice_ids[user_id] = response_data['id']
                         update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
                         return
-                    else:
-                        logger.error("No voice ID in response")
-                except ValueError:
-                    logger.error("Invalid JSON response")
+                    logger.error("No voice ID in response")
+                except ValueError as e:
+                    logger.error(f"JSON decode error: {str(e)}")
             
             logger.error(f"API Error: {response.status_code} - {response.text}")
             update.message.reply_text("❌ فشل في معالجة الصوت. الرجاء المحاولة بملف آخر")
@@ -99,10 +113,6 @@ def handle_audio(update, context):
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         update.message.reply_text("❌ حدث خطأ غير متوقع")
-
-    except Exception as e:
-        logger.error(f"Critical error: {str(e)}", exc_info=True)
-        update.message.reply_text("❌ حدث خطأ غير متوقع في النظام.")
 
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
 def webhook():
