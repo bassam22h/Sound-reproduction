@@ -3,7 +3,7 @@ import logging
 import json
 from flask import Flask, request
 from telegram import Bot, Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -35,25 +35,26 @@ API_KEY = os.getenv('SPEECHIFY_API_KEY')
 bot = Bot(token=BOT_TOKEN)
 app = Flask(__name__)
 
-# إنشاء Application
-application = Application.builder().token(BOT_TOKEN).build()
+# إنشاء Updater
+updater = Updater(token=BOT_TOKEN, use_context=True)
+dp = updater.dispatcher
 
 user_voice_ids = {}
 
-async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text("مرحباً! أرسل مقطعاً صوتياً لاستنساخ صوتك.")
+def start(update, context):
+    context.bot.send_message(chat_id=update.effective_chat.id, text="مرحباً! أرسل مقطعاً صوتياً لاستنساخ صوتك.")
 
-async def handle_audio(update: Update, context: CallbackContext):
+def handle_audio(update, context):
     try:
         user_id = update.message.from_user.id
         file = update.message.voice or update.message.audio
         
         if not file:
-            await update.message.reply_text("الرجاء إرسال مقطع صوتي فقط.")
+            context.bot.send_message(chat_id=update.effective_chat.id, text="الرجاء إرسال مقطع صوتي فقط.")
             return
 
-        tg_file = await bot.get_file(file.file_id)
-        audio_data = (await session.get(tg_file.file_path, timeout=10)).content
+        tg_file = bot.get_file(file.file_id)
+        audio_data = session.get(tg_file.file_path, timeout=10).content
 
         consent_data = {
             "fullName": f"User_{user_id}",
@@ -80,26 +81,26 @@ async def handle_audio(update: Update, context: CallbackContext):
         if response.status_code == 200:
             voice_id = response.json().get('id')
             user_voice_ids[user_id] = voice_id
-            await update.message.reply_text("✅ تم استنساخ صوتك بنجاح!")
+            context.bot.send_message(chat_id=update.effective_chat.id, text="✅ تم استنساخ صوتك بنجاح!")
         else:
-            await update.message.reply_text(f"❌ خطأ: {response.text}")
+            context.bot.send_message(chat_id=update.effective_chat.id, text=f"❌ خطأ: {response.text}")
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")
-        await update.message.reply_text("❌ حدث خطأ غير متوقع")
+        context.bot.send_message(chat_id=update.effective_chat.id, text="❌ حدث خطأ غير متوقع")
 
-async def handle_text(update: Update, context: CallbackContext):
+def handle_text(update, context):
     try:
         user_id = update.message.from_user.id
         text = update.message.text
 
         if not text or len(text) > 500:
-            await update.message.reply_text("الرجاء إرسال نص صالح (500 حرف كحد أقصى).")
+            context.bot.send_message(chat_id=update.effective_chat.id, text="الرجاء إرسال نص صالح (500 حرف كحد أقصى).")
             return
 
         voice_id = user_voice_ids.get(user_id)
         if not voice_id:
-            await update.message.reply_text("❌ يرجى استنساخ صوتك أولاً.")
+            context.bot.send_message(chat_id=update.effective_chat.id, text="❌ يرجى استنساخ صوتك أولاً.")
             return
 
         headers = {
@@ -123,26 +124,25 @@ async def handle_text(update: Update, context: CallbackContext):
         if response.status_code == 200:
             audio_url = response.json().get('url')
             if audio_url:
-                await update.message.reply_voice(audio_url)
+                context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio_url)
             else:
-                await update.message.reply_text("❌ لم يتم إنشاء الصوت")
+                context.bot.send_message(chat_id=update.effective_chat.id, text="❌ لم يتم إنشاء الصوت")
         else:
-            await update.message.reply_text(f"❌ خطأ: {response.text}")
+            context.bot.send_message(chat_id=update.effective_chat.id, text=f"❌ خطأ: {response.text}")
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")
-        await update.message.reply_text("❌ حدث خطأ غير متوقع")
+        context.bot.send_message(chat_id=update.effective_chat.id, text="❌ حدث خطأ غير متوقع")
 
 # إضافة handlers
-application.add_handler(CommandHandler("start", start))
-application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_audio))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+dp.add_handler(CommandHandler("start", start))
+dp.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
+dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
 
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
-async def webhook():
-    json_data = await request.get_json()
-    update = Update.de_json(json_data, bot)
-    await application.update_queue.put(update)
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
+    dp.process_update(update)
     return 'ok'
 
 @app.route('/')
