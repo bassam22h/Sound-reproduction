@@ -1,5 +1,8 @@
-import os from flask import Flask, request from telegram import Bot, Update from telegram.ext import Dispatcher, CommandHandler, MessageHandler, Filters import requests
-
+import os
+from flask import Flask, request
+from telegram import Bot, Update
+from telegram.ext import Dispatcher, CommandHandler, MessageHandler, Filters
+import requests
 app = Flask(name)
 
 BOT_TOKEN = os.getenv('BOT_TOKEN') WEBHOOK_URL = os.getenv('WEBHOOK_URL') API_KEY = os.getenv('SPEECHIFY_API_KEY')
