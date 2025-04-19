@@ -1,108 +1,81 @@
-import os
-import requests
-from flask import Flask, request
-from telegram import Bot, InputFile
+import os from flask import Flask, request from telegram import Bot, Update from telegram.ext import Dispatcher, CommandHandler, MessageHandler, Filters import requests
 
-app = Flask(__name__)
+app = Flask(name)
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-API_KEY = os.getenv("API_KEY")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+BOT_TOKEN = os.getenv('BOT_TOKEN') WEBHOOK_URL = os.getenv('WEBHOOK_URL') API_KEY = os.getenv('SPEECHIFY_API_KEY')
 
-bot = Bot(token=BOT_TOKEN)
+bot = Bot(token=BOT_TOKEN) dispatcher = Dispatcher(bot, None, workers=0)
 
-# خريطة لتخزين voice_id للمستخدمين
-user_voice_ids = {}
+تخزين voice_id لكل مستخدم مؤقتًا
 
-@app.route("/set_webhook", methods=["GET"])
-def set_webhook():
-    bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
-    return "Webhook set!"
+user_voices = {}
 
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def webhook():
-    data = request.get_json()
-    if "message" in data:
-        chat_id = data["message"]["chat"]["id"]
-        message = data["message"]
+استقبال /start
 
-        # استقبال النصوص
-        if "text" in message:
-            text = message["text"]
-            if len(text) > 500:
-                bot.send_message(chat_id=chat_id, text="عذرًا، الحد الأقصى 500 حرف.")
-                return "OK"
+def start(update, context): update.message.reply_text("أهلاً! أرسل مقطع صوتي (10-30 ثانية) لاستنساخ صوتك، ثم أرسل نصًا (200 حرف كحد أقصى) لتحويله للصوت.")
 
-            # تحقق لو عنده voice_id مستنسخ
-            voice_id = user_voice_ids.get(chat_id, "ar-ye-nasser")
+استقبال مقطع صوتي
 
-            api_url = "https://api.sws.speechify.com/v1/audio/speech"
-            headers = {
-                "accept": "application/json",
-                "content-type": "application/json",
-                "Authorization": f"Bearer {API_KEY}"
-            }
-            payload = {
-                "text": text,
-                "voice_id": voice_id,
-                "output_format": "mp3"
-            }
+def handle_voice(update, context): user_id = update.message.from_user.id file = bot.getFile(update.message.voice.file_id) file_path = f"temp/{user_id}.ogg" file.download(file_path)
 
-            try:
-                response = requests.post(api_url, json=payload, headers=headers)
-                response.raise_for_status()
-                audio_url = response.json()["url"]
+with open(file_path, 'rb') as audio_file:
+    response = requests.post(
+        'https://api.sws.speechify.com/v1/voices',
+        headers={
+            'Authorization': f'Bearer {API_KEY}'
+        },
+        files={'file': audio_file},
+        data={'name': f'user_{user_id}', 'consent': 'true'}
+    )
 
-                audio_data = requests.get(audio_url)
-                audio_file = f"voice_{chat_id}.mp3"
-                with open(audio_file, "wb") as f:
-                    f.write(audio_data.content)
+os.remove(file_path)
 
-                bot.send_audio(chat_id=chat_id, audio=InputFile(audio_file))
-                os.remove(audio_file)
+if response.status_code == 200:
+    voice_id = response.json().get('id')
+    user_voices[user_id] = voice_id
+    update.message.reply_text("تم استنساخ صوتك بنجاح! الآن أرسل نصًا (200 حرف كحد أقصى) لتحويله إلى صوت.")
+else:
+    update.message.reply_text("حدث خطأ أثناء استنساخ الصوت. جرّب مرة أخرى.")
 
-            except Exception as e:
-                bot.send_message(chat_id=chat_id, text=f"خطأ أثناء التحويل: {e}")
+استقبال نص وتحويله لصوت
 
-        # استقبال مقطع صوتي للاستنساخ
-        elif "voice" in message:
-            file_id = message["voice"]["file_id"]
-            file_info = bot.get_file(file_id)
-            file_url = file_info.file_path
-            local_file = f"{chat_id}_sample.ogg"
-            voice_file = requests.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_url}")
+def handle_text(update, context): user_id = update.message.from_user.id text = update.message.text.strip()
 
-            with open(local_file, "wb") as f:
-                f.write(voice_file.content)
+if len(text) > 200:
+    update.message.reply_text("النص طويل جدًا. الرجاء إرسال نص لا يتجاوز 200 حرف.")
+    return
 
-            # رفع المقطع لـ Speechify
-            api_url = "https://api.sws.speechify.com/v1/voices"
-            headers = {
-                "Authorization": f"Bearer {API_KEY}"
-            }
-            files = {
-                "audio": open(local_file, "rb"),
-            }
-            data = {
-                "name": f"User_{chat_id}_voice",
-                "consent": "true"
-            }
+voice_id = user_voices.get(user_id)
+if not voice_id:
+    update.message.reply_text("أرسل مقطع صوتي أولًا لاستنساخ صوتك.")
+    return
 
-            try:
-                response = requests.post(api_url, headers=headers, files=files, data=data)
-                response.raise_for_status()
-                new_voice_id = response.json()["id"]
-                user_voice_ids[chat_id] = new_voice_id
+response = requests.post(
+    'https://api.sws.speechify.com/v1/audio/speech',
+    headers={
+        'Authorization': f'Bearer {API_KEY}',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'text': text,
+        'voice_id': voice_id,
+        'output_format': 'mp3'
+    }
+)
 
-                bot.send_message(chat_id=chat_id, text="تم استنساخ الصوت بنجاح! يمكنك الآن إرسال نصوص لتحويلها بهذا الصوت.")
+if response.status_code == 200:
+    audio_url = response.json().get('url')
+    update.message.reply_voice(audio_url)
+else:
+    update.message.reply_text("حدث خطأ أثناء التحويل. تأكد من إرسال نص صحيح.")
 
-            except Exception as e:
-                bot.send_message(chat_id=chat_id, text=f"فشل في استنساخ الصوت: {e}")
+إعداد الهاندلرز
 
-            finally:
-                os.remove(local_file)
+dispatcher.add_handler(CommandHandler('start', start)) dispatcher.add_handler(MessageHandler(Filters.voice, handle_voice)) dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
 
-    return "OK"
+Webhook endpoint
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+@app.route(f'/{BOT_TOKEN}', methods=['POST']) def webhook(): update = Update.de_json(request.get_json(force=True), bot) dispatcher.process_update(update) return 'ok'
+
+if name == 'main': bot.set_webhook(f'{WEBHOOK_URL}/{BOT_TOKEN}') app.run(host='0.0.0.0', port=10000)
+
