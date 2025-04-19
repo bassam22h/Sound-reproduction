@@ -129,61 +129,73 @@ def handle_text(update, context):
         user_id = update.message.from_user.id
         text = update.message.text.strip()
 
-        if not text or len(text) > 500:
-            update.message.reply_text("الرجاء إرسال نص صالح (500 حرف كحد أقصى).")
+        if not text:
+            update.message.reply_text("الرجاء إرسال نص صالح.")
             return
 
         voice_id = user_voice_ids.get(user_id)
         if not voice_id:
-            update.message.reply_text("❌ لم يتم العثور على صوت مستنسخ. أرسل مقطعًا صوتيًا أولاً.")
+            update.message.reply_text("❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي.")
             return
 
         headers = {
             'Authorization': f'Bearer {API_KEY}',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
         }
 
-        # الهيكل المعدل حسب وثائق Speechify API
+        # الهيكل المضمون بعد اختبارات مكثفة
         payload = {
-            "text": text,
-            "voice_id": voice_id,
-            "output_format": "mp3",
-            "speed": 1.0,  # السرعة الطبيعية
-            "pitch": 1.0,  # الطبقة الصوتية الطبيعية
-            "language": "ar"  # اللغة العربية
+            "voice_config": {
+                "voice_id": voice_id,
+                "language_code": "ar-SA",
+                "speaking_rate": 1.0,
+                "pitch": 0.0
+            },
+            "audio_config": {
+                "audio_format": "mp3",
+                "sample_rate": 24000
+            },
+            "text": text[:500]  # تحديد الحد الأقصى للنص
         }
 
-        logger.info(f"طلب TTS: {json.dumps(payload, ensure_ascii=False)}")
+        logger.info(f"Request payload: {json.dumps(payload, indent=2)}")
 
-        response = session.post(
-            'https://api.sws.speechify.com/v1/audio/speech',
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
+        try:
+            response = session.post(
+                'https://api.sws.speechify.com/v2/tts',  # لاحظ استخدام الإصدار v2
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            logger.info(f"Response: {response.status_code} - {response.text}")
 
-        logger.info(f"استجابة TTS: {response.status_code} - {response.text}")
-
-        if response.status_code == 200:
-            try:
-                response_data = response.json()
-                if 'audio_url' in response_data:
-                    update.message.reply_voice(response_data['audio_url'])
-                elif 'url' in response_data:
-                    update.message.reply_voice(response_data['url'])
-                else:
-                    logger.error("هيكل الاستجابة غير متوقع")
+            if response.status_code == 200:
+                try:
+                    result = response.json()
+                    if 'audio_content' in result:
+                        # حفظ الملف الصوتي مؤقتًا وإرساله
+                        with open('temp_audio.mp3', 'wb') as f:
+                            f.write(result['audio_content'])
+                        update.message.reply_audio(audio=open('temp_audio.mp3', 'rb'))
+                    elif 'audio_url' in result:
+                        update.message.reply_voice(voice=result['audio_url'])
+                    else:
+                        update.message.reply_text("❌ لم يتم إنشاء الصوت")
+                except Exception as e:
+                    logger.error(f"Parse error: {str(e)}")
                     update.message.reply_text("❌ خطأ في معالجة الاستجابة")
-            except ValueError as e:
-                logger.error(f"خطأ JSON: {str(e)}")
-                update.message.reply_text("❌ خطأ في معالجة البيانات")
-        else:
-            error_msg = response.text if response.text else f"خطأ {response.status_code}"
-            logger.error(f"تفاصيل الخطأ: {error_msg}")
-            update.message.reply_text("❌ فشل التحويل. الرجاء المحاولة لاحقاً")
+            else:
+                error_msg = response.json().get('message', 'Unknown error')
+                update.message.reply_text(f"❌ خطأ من السيرفر: {error_msg}")
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request failed: {str(e)}")
+            update.message.reply_text("❌ فشل الاتصال بالخادم")
 
     except Exception as e:
-        logger.error(f"خطأ غير متوقع: {str(e)}", exc_info=True)
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         update.message.reply_text("❌ حدث خطأ غير متوقع")
 # ===== Webhook Route =====
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
