@@ -38,7 +38,7 @@ def handle_audio(update, context):
         tg_file = bot.get_file(file.file_id)
         audio_data = requests.get(tg_file.file_path).content
 
-        # إعداد بيانات الطلب
+        # إعداد بيانات الطلب - التركيز هنا على معلمة consent
         headers = {
             'Authorization': f'Bearer {API_KEY}',
             'Accept': 'application/json'
@@ -48,18 +48,28 @@ def handle_audio(update, context):
             'audio': ('voice.ogg', audio_data, 'audio/ogg')
         }
 
+        # المحاولة الأولى: إرسال consent كقيمة بولينية (True/False)
         data = {
             'name': f'user_{user_id}_voice',
-            'consent': 'true'
+            'consent': True  # تغيير هنا من 'true' إلى True (قيمة بولينية)
         }
 
-        # إرسال الطلب
         response = requests.post(
             'https://api.sws.speechify.com/v1/voices',
             headers=headers,
             files=files,
             data=data
         )
+
+        # إذا فشلت المحاولة الأولى (400/422)، نجرب إرسال consent كنص
+        if response.status_code in [400, 422]:
+            data['consent'] = 'true'  # إرسالها كنص
+            response = requests.post(
+                'https://api.sws.speechify.com/v1/voices',
+                headers=headers,
+                files=files,
+                data=data
+            )
 
         logger.info(f"API Response: {response.status_code} - {response.text}")
 
