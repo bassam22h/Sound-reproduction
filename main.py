@@ -47,19 +47,20 @@ def handle_audio(update, context):
         # الحل الجديد: إرسال consent كـ "1" أو "yes" بدلاً من true/True
         data = {
             'name': f'user_{user_id}_voice',
-            'consent': "yes"  # التغيير الرئيسي هنا
-        }
+        data = {
+    'name': f'user_{user_id}_voice',
+    'consent': "true"  # أو جرب "1" أو "yes"
+}
 
-        files = {
-            'audio': ('voice.ogg', audio_data, 'audio/ogg')
-        }
-
-        response = requests.post(
-            'https://api.sws.speechify.com/v1/voices',
-            headers=headers,
-            files=files,
-            data=data
-        )
+# أو جرب إرسالها كـ JSON بدلاً من form-data
+response = requests.post(
+    'https://api.sws.speechify.com/v1/voices',
+    headers=headers,
+    files={'audio': ('voice.ogg', audio_data)},
+    data=data,
+    # أو جرب:
+    # json={'name': data['name'], 'consent': data['consent'], 'audio': audio_data}
+)
 
         logger.info(f"API Response: {response.status_code} - {response.text}")
 
