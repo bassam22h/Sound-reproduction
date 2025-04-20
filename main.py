@@ -1,5 +1,5 @@
 import os
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.ext import Updater, CommandHandler, MessageHandler, filters
 from handlers import start, audio, text, error
 from subscription import check_subscription
 
@@ -17,7 +17,7 @@ def main():
         check_subscription(audio.handle_audio)
     ))
     dp.add_handler(MessageHandler(
-        Filters.text & ~Filters.command,
+        filters.text & ~filters.command,
         check_subscription(text.handle_text)
     ))
     
