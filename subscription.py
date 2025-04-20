@@ -44,24 +44,29 @@ async def is_subscribed(update, context, user_id):
         return False
 
 async def send_subscription_message(update, context):
+    from templates.keyboards import get_channels_keyboard
+    
     channels = os.getenv('REQUIRED_CHANNELS', '').split(',')
     message = "⚠️ يجب عليك الاشتراك في القنوات التالية لاستخدام البوت:\n\n"
     message += "\n".join([f"- @{channel.strip()}" for channel in channels if channel.strip()])
-    message += "\n\nبعد الاشتراك، أعد المحاولة مرة أخرى."
+    message += "\n\nبعد الاشتراك، اضغط على زر '✅ لقد اشتركت' للتحقق."
     
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=message,
-        parse_mode=ParseMode.MARKDOWN
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=get_channels_keyboard()
     )
 
 async def send_trial_expired_message(update, context):
-    payment_channel = os.getenv('PAYMENT_CHANNEL', 'payment_channel')
+    from templates.keyboards import get_payment_keyboard
+    
     message = "❌ لقد استنفذت جميع محاولاتك المجانية.\n"
-    message += f"للترقية إلى الإصدار المدفوع، يرجى زيارة @{payment_channel}"
+    message += "للترقية إلى الإصدار المدفوع، يرجى استخدام الزر أدناه:"
     
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=message,
-        parse_mode=ParseMode.MARKDOWN
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=get_payment_keyboard()
     )
