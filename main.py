@@ -8,6 +8,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import langdetect  # مكتبة جديدة للكشف عن اللغة
 
 # إعداد اتصالات requests محسنة
 session = requests.Session()
@@ -42,8 +43,26 @@ dp = updater.dispatcher
 
 user_voice_ids = {}
 
+def detect_language(text):
+    """دالة للكشف عن لغة النص"""
+    try:
+        from langdetect import detect
+        lang = detect(text)
+        # تحويل بعض الرموز الشائعة إلى رموز API المطلوبة
+        lang_map = {
+            'ar': 'ar-SA',  # العربية
+            'en': 'en-US',  # الإنجليزية
+            'fr': 'fr-FR',  # الفرنسية
+            'es': 'es-ES',  # الإسبانية
+            'de': 'de-DE'   # الألمانية
+        }
+        return lang_map.get(lang, 'auto')  # إذا لم تكن اللغة معروفة، نستخدم auto
+    except:
+        return 'auto'  # في حالة الخطأ، نستخدم الوضع التلقائي
+
 def start(update, context):
-    context.bot.send_message(chat_id=update.effective_chat.id, text="مرحباً! أرسل مقطعاً صوتياً لاستنساخ صوتك.")
+    context.bot.send_message(chat_id=update.effective_chat.id, 
+                           text="مرحباً! أرسل مقطعاً صوتياً لاستنساخ صوتك.")
 
 def handle_audio(update, context):
     try:
@@ -67,7 +86,7 @@ def handle_audio(update, context):
             'name': f'user_{user_id}_voice',
             'gender': 'male',
             'consent': json.dumps(consent_data, ensure_ascii=False),
-            'locale': 'ar-SA'  # إضافة locale للغة العربية
+            'locale': 'auto'  # تمكين الكشف التلقائي عن اللغة
         }
 
         files = {
@@ -119,12 +138,16 @@ def handle_text(update, context):
                                    text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).")
             return
 
+        # الكشف التلقائي عن اللغة
+        detected_lang = detect_language(text)
+        
         payload = {
             "input": text,
             "voice_id": voice_id,
             "output_format": "mp3",
-            "language": "ar",  # تحديد اللغة العربية
-            "locale": "ar-SA"  # تحديد الإعدادات المحلية للغة العربية
+            "language": "auto",  # تمكين الكشف التلقائي
+            "locale": detected_lang if detected_lang != 'auto' else 'ar-SA',  # استخدام اللغة المكتشفة أو العربية كافتراضي
+            "auto_detect": True  # تمكين الكشف التلقائي في API
         }
 
         response = session.post(
