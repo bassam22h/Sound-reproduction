@@ -125,10 +125,10 @@ def handle_text(update, context):
                                    text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).")
             return
 
-        # تحضير بيانات الطلب مع الهيكل الصحيح
+        # تحضير بيانات الطلب
         payload = {
-            "input": text,  # تغيير من "text" إلى "input" كما تتوقع API
-            "voice_id": voice_id,  # التأكد من أن اسم الحقل يتطابق مع ما تتوقعه API
+            "input": text,
+            "voice_id": voice_id,
             "output_format": "mp3"
         }
 
@@ -138,32 +138,49 @@ def handle_text(update, context):
             headers={
                 'Authorization': f'Bearer {API_KEY}',
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'audio/mpeg'  # تغيير إلى نوع المحتوى المتوقع
             },
             json=payload,
             timeout=25
         )
 
-        # تسجيل الطلب والرد للأغراض التشخيصية
-        logger.info(f"Request payload: {payload}")
-        logger.info(f"API Response: {response.status_code} - {response.text}")
+        # تسجيل الاستجابة للأغراض التشخيصية
+        logger.info(f"API Response Status: {response.status_code}")
+        logger.info(f"API Response Headers: {response.headers}")
+        logger.info(f"API Response Content Type: {response.headers.get('Content-Type')}")
 
         # معالجة الرد
         if response.status_code == 200:
-            try:
-                result = response.json()
-                audio_url = result.get('url')
-                if audio_url:
-                    context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio_url)
-                else:
-                    context.bot.send_message(chat_id=update.effective_chat.id, 
-                                           text="❌ لم يتم إنشاء الصوت، يرجى المحاولة لاحقاً")
-            except json.JSONDecodeError:
-                if response.text.startswith(('http://', 'https://')):
-                    context.bot.send_voice(chat_id=update.effective_chat.id, voice=response.text)
-                else:
+            content_type = response.headers.get('Content-Type', '')
+            
+            if 'audio/mpeg' in content_type or 'audio/mp3' in content_type:
+                # حفظ الملف الصوتي مؤقتاً
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_audio:
+                    temp_audio.write(response.content)
+                    temp_audio_path = temp_audio.name
+                
+                # إرسال الملف الصوتي
+                with open(temp_audio_path, 'rb') as audio_file:
+                    context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio_file)
+                
+                # حذف الملف المؤقت
+                os.unlink(temp_audio_path)
+                
+            elif 'application/json' in content_type:
+                try:
+                    result = response.json()
+                    audio_url = result.get('url')
+                    if audio_url:
+                        context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio_url)
+                    else:
+                        context.bot.send_message(chat_id=update.effective_chat.id, 
+                                               text="❌ لم يتم إنشاء الصوت، يرجى المحاولة لاحقاً")
+                except json.JSONDecodeError:
                     context.bot.send_message(chat_id=update.effective_chat.id, 
                                            text="❌ حدث خطأ في معالجة الرد من الخادم")
+            else:
+                context.bot.send_message(chat_id=update.effective_chat.id, 
+                                       text="❌ تنسيق الرد غير متوقع من الخادم")
         else:
             try:
                 error_data = response.json()
