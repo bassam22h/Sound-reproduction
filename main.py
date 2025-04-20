@@ -1,47 +1,42 @@
 import os
-from telegram.ext import Updater, CommandHandler, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 from handlers import start, audio, text, error
 from subscription import check_subscription
 
-def main():
+async def main():
     # قراءة متغيرات البيئة
     BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
     
-    updater = Updater(token=BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    # إنشاء التطبيق (بدلاً من Updater)
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # إضافة handlers مع التحقق من الاشتراك
-    dp.add_handler(CommandHandler("start", start.start))
-    dp.add_handler(MessageHandler(
+    # إضافة handlers
+    application.add_handler(CommandHandler("start", start.start))
+    application.add_handler(MessageHandler(
         filters.VOICE | filters.AUDIO,
         check_subscription(audio.handle_audio)
     ))
-    dp.add_handler(MessageHandler(
+    application.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND,
         check_subscription(text.handle_text)
     ))
     
-    dp.add_error_handler(error.error_handler)
+    application.add_error_handler(error.error_handler)
 
     # بدء البوت
     if os.getenv('WEBHOOK_MODE', 'false').lower() == 'true':
         PORT = int(os.getenv('PORT', 10000))
         WEBHOOK_URL = os.getenv('WEBHOOK_URL')
         
-        # إعداد ويب هوك
-        updater.start_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path=os.getenv('TELEGRAM_BOT_TOKEN'),
-            webhook_url=WEBHOOK_URL,
-            cert=None  # مهم لعدم استخدام SSL محلي
+        await application.bot.set_webhook(
+            url=WEBHOOK_URL,
+            drop_pending_updates=True
         )
         print(f"✅ Bot started in webhook mode on port {PORT}")
     else:
-        updater.start_polling()
+        await application.run_polling()
         print("✅ Bot started in polling mode")
 
-    updater.idle()
-
 if __name__ == '__main__':
-    main()
+    import asyncio
+    asyncio.run(main())
