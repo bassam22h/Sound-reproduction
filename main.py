@@ -20,25 +20,24 @@ async def run_bot():
     ))
     application.add_error_handler(error.error_handler)
 
-    # تشغيل البوت
-    if os.getenv('WEBHOOK_MODE', 'false').lower() == 'true':
-        await application.bot.set_webhook(
-            url=os.getenv('WEBHOOK_URL'),
-            drop_pending_updates=True
-        )
-        print("✅ Bot running in webhook mode")
+    # تشغيل ويب هوك
+    PORT = int(os.getenv('PORT', 10000))
+    WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+    
+    await application.bot.set_webhook(
+        url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
+        drop_pending_updates=True
+    )
+    
+    async with application:
+        await application.start()
+        print(f"✅ Bot running in webhook mode on port {PORT}")
         await asyncio.Event().wait()  # يبقي البوت نشطاً
-    else:
-        print("✅ Bot running in polling mode")
-        await application.run_polling()
 
-def main():
+if __name__ == '__main__':
     try:
         asyncio.run(run_bot())
     except KeyboardInterrupt:
         print("Bot stopped manually")
     except Exception as e:
         print(f"❌ Error: {e}")
-
-if __name__ == '__main__':
-    main()
