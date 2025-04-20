@@ -62,8 +62,8 @@ def handle_audio(update, context):
         consent_data = {
     "fullName": f"User_{user_id}",
     "email": f"user_{user_id}@bot.com",
-    "locale": "ar-SA"  # <=== اضفنا هنا تحديد اللغة العربية
-}
+    "locale": "ar-SA"
+        }
 
 data = {
     'name': f'user_{user_id}_voice',
