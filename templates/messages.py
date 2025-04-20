@@ -1,3 +1,4 @@
+import os
 WELCOME_MESSAGE = """
 مرحباً *{user_name}*! 👋
 
