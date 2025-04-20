@@ -58,7 +58,7 @@ def handle_audio(update, context):
         tg_file = context.bot.get_file(file.file_id)
         audio_data = session.get(tg_file.file_path, timeout=10).content
 
-        consent_data = {
+        
         consent_data = {
     "fullName": f"User_{user_id}",
     "email": f"user_{user_id}@bot.com",
