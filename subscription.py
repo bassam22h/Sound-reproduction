@@ -1,6 +1,6 @@
 import os
 import asyncio
-from telegram.constants import ParseMode
+from telegram import ParseMode
 from telegram.ext import CallbackContext
 from database import get_user_data, update_user_data
 
