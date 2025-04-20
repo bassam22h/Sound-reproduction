@@ -2,6 +2,7 @@ import os
 from telegram import Update
 from telegram.ext import CallbackContext
 from templates.messages import WELCOME_MESSAGE
+from templates.keyboards import get_main_keyboard
 
 async def start(update: Update, context: CallbackContext):
     user = update.effective_user
@@ -16,5 +17,6 @@ async def start(update: Update, context: CallbackContext):
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=welcome_msg,
-        parse_mode='Markdown'
+        parse_mode='Markdown',
+        reply_markup=get_main_keyboard()
     )
