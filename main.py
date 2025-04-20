@@ -52,7 +52,7 @@ def handle_audio(update, context):
         
         if not file:
             context.bot.send_message(chat_id=update.effective_chat.id, 
-                                     text="الرجاء إرسال مقطع صوتي فقط (بين 10-30 ثانية).")
+                                   text="الرجاء إرسال مقطع صوتي فقط (بين 10-30 ثانية).")
             return
 
         tg_file = context.bot.get_file(file.file_id)
@@ -60,18 +60,18 @@ def handle_audio(update, context):
 
         consent_data = {
             "fullName": f"User_{user_id}",
-            "email": f"user_{user_id}@bot.com",
-            "locale": "ar-SA"  # تحديد اللغة العربية
+            "email": f"user_{user_id}@bot.com"
         }
 
         data = {
             'name': f'user_{user_id}_voice',
             'gender': 'male',
             'consent': json.dumps(consent_data, ensure_ascii=False)
+            # تم إزالة locale حسب الوثائق
         }
 
         files = {
-            'sample': ('voice_sample.ogg', audio_data, 'audio/ogg')
+            'sample': ('voice_sample.ogg', audio_data, 'audio/ogg'),
         }
 
         for key, value in data.items():
@@ -88,20 +88,20 @@ def handle_audio(update, context):
             voice_id = response.json().get('id')
             user_voice_ids[user_id] = voice_id
             context.bot.send_message(chat_id=update.effective_chat.id, 
-                                     text="✅ تم استنساخ صوتك بنجاح! يمكنك الآن إرسال النص لتحويله إلى صوت.")
+                                   text="✅ تم استنساخ صوتك بنجاح! يمكنك الآن إرسال النص لتحويله إلى صوت.")
         else:
             error_msg = response.json().get('message', 'Unknown error')
             context.bot.send_message(chat_id=update.effective_chat.id, 
-                                     text=f"❌ خطأ في API: {error_msg}")
+                                   text=f"❌ خطأ في API: {error_msg}")
 
     except json.JSONDecodeError:
         logger.error("Failed to decode JSON response")
         context.bot.send_message(chat_id=update.effective_chat.id, 
-                                 text="❌ حدث خطأ في معالجة الرد من الخادم")
+                               text="❌ حدث خطأ في معالجة الرد من الخادم")
     except Exception as e:
         logger.error(f"Error in handle_audio: {str(e)}")
         context.bot.send_message(chat_id=update.effective_chat.id, 
-                                 text="❌ حدث خطأ غير متوقع أثناء معالجة الصوت")
+                               text="❌ حدث خطأ غير متوقع أثناء معالجة الصوت")
 
 def handle_text(update, context):
     try:
@@ -110,19 +110,20 @@ def handle_text(update, context):
 
         if not text or len(text) > 20000:
             context.bot.send_message(chat_id=update.effective_chat.id, 
-                                     text="الرجاء إرسال نص صالح (بين 1-20,000 حرف).")
+                                   text="الرجاء إرسال نص صالح (بين 1-20,000 حرف).")
             return
 
         voice_id = user_voice_ids.get(user_id)
         if not voice_id:
             context.bot.send_message(chat_id=update.effective_chat.id, 
-                                     text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).")
+                                   text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).")
             return
 
         payload = {
             "input": text,
             "voice_id": voice_id,
             "output_format": "mp3"
+            # تم إزالة language و locale حسب الوثائق
         }
 
         response = session.post(
@@ -153,7 +154,8 @@ def handle_text(update, context):
             except Exception as e:
                 logger.error(f"Streaming audio processing error: {str(e)}", exc_info=True)
                 context.bot.send_message(chat_id=update.effective_chat.id, 
-                                         text="❌ حدث خطأ أثناء معالجة الصوت المتدفق")
+                                      text="❌ حدث خطأ أثناء معالجة الصوت المتدفق")
+
         else:
             try:
                 error_data = response.json()
@@ -162,12 +164,12 @@ def handle_text(update, context):
                 error_msg = response.text
                 
             context.bot.send_message(chat_id=update.effective_chat.id, 
-                                     text=f"❌ خطأ في تحويل النص: {error_msg}")
+                                   text=f"❌ خطأ في تحويل النص: {error_msg}")
 
     except Exception as e:
         logger.error(f"Error in handle_text: {str(e)}", exc_info=True)
         context.bot.send_message(chat_id=update.effective_chat.id, 
-                                 text="❌ حدث خطأ غير متوقع أثناء معالجة النص")
+                               text="❌ حدث خطأ غير متوقع أثناء معالجة النص")
 
 # إضافة handlers
 dp.add_handler(CommandHandler("start", start))
