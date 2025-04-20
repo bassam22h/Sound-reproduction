@@ -1,12 +1,26 @@
 import os
+import time
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from handlers import start, audio, text, error
 from subscription import check_subscription
 
+def ensure_single_instance(bot_token):
+    """يتأكد من عدم وجود نسخ أخرى تعمل"""
+    from telegram import Bot
+    bot = Bot(token=bot_token)
+    try:
+        bot.delete_webhook(drop_pending_updates=True)
+        time.sleep(3)  # انتظر 3 ثوانٍ لضمان الإغلاق
+    except Exception as e:
+        print(f"⚠️ Warning: {e}")
+
 def main():
     BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
     
-    # الإعداد الأساسي بدون خيارات معقدة
+    # الخطوة الحاسمة: إيقاف أي نسخ متعارضة
+    ensure_single_instance(BOT_TOKEN)
+    
+    # إعداد البوت بشكل مبسط
     updater = Updater(token=BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
@@ -21,24 +35,22 @@ def main():
         check_subscription(text.handle_text)
     ))
     
-    # معالج أخطاء مبسط
     dp.add_error_handler(error.error_handler)
 
-    # تشغيل البوت (اختر واحدًا فقط)
-    if os.getenv('WEBHOOK_MODE', 'false').lower() == 'true':
-        PORT = int(os.getenv('PORT', 10000))
-        WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-        
-        updater.start_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path=BOT_TOKEN,
-            webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
-        )
-    else:
-        updater.start_polling()
+    # تشغيل البوت (ويب هوك فقط)
+    PORT = int(os.getenv('PORT', 10000))
+    WEBHOOK_URL = os.getenv('WEBHOOK_URL')
     
-    print("✅ البوت يعمل الآن!")
+    updater.start_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path=BOT_TOKEN,
+        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
+        drop_pending_updates=True
+    )
+    print(f"✅ البوت يعمل على الويب هوك (البورت: {PORT})")
+    print(f"✅ عنوان الويب هوك: {WEBHOOK_URL}/{BOT_TOKEN}")
+    
     updater.idle()
 
 if __name__ == '__main__':
