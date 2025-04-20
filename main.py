@@ -119,16 +119,15 @@ def handle_text(update, context):
                                    text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).")
             return
 
-        # التعديل الأساسي هنا - استخدام endpoint V2 الخاص بالعربية
-        endpoint = f'https://api.sws.speechify.com/v2/tts/arabic?voice_id={voice_id}'
-        
         payload = {
-            "text": text,
+            "input": text,
+            "voice_id": voice_id,
             "output_format": "mp3"
+            # تم إزالة language و locale حسب الوثائق
         }
 
         response = session.post(
-            endpoint,  # استخدام المتغير endpoint الجديد
+            'https://api.sws.speechify.com/v1/audio/stream',
             headers={
                 'Authorization': f'Bearer {API_KEY}',
                 'Content-Type': 'application/json',
@@ -139,7 +138,6 @@ def handle_text(update, context):
             timeout=30
         )
 
-        # باقي الكود يبقى كما هو...
         if response.status_code == 200:
             try:
                 with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_audio:
