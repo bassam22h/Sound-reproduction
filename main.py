@@ -59,16 +59,17 @@ def handle_audio(update, context):
         audio_data = session.get(tg_file.file_path, timeout=10).content
 
         consent_data = {
-            "fullName": f"User_{user_id}",
-            "email": f"user_{user_id}@bot.com"
-        }
+        consent_data = {
+    "fullName": f"User_{user_id}",
+    "email": f"user_{user_id}@bot.com",
+    "locale": "ar-SA"  # <=== اضفنا هنا تحديد اللغة العربية
+}
 
-        data = {
-            'name': f'user_{user_id}_voice',
-            'gender': 'male',
-            'consent': json.dumps(consent_data, ensure_ascii=False)
-            # تم إزالة locale حسب الوثائق
-        }
+data = {
+    'name': f'user_{user_id}_voice',
+    'gender': 'male',
+    'consent': json.dumps(consent_data, ensure_ascii=False)
+}
 
         files = {
             'sample': ('voice_sample.ogg', audio_data, 'audio/ogg'),
