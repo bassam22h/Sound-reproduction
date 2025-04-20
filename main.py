@@ -122,7 +122,7 @@ def handle_text(update, context):
             "input": text,
             "voice_id": voice_id,
             "output_format": "mp3",
-            "model": "simba_multilingual"  # هنا أضفنا اختيار النموذج
+            "model": "simba-multilingual"  # <-- إصلاح هنا!
         }
 
         response = session.post(
