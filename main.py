@@ -77,6 +77,12 @@ def handle_audio(update, context):
         tg_file = context.bot.get_file(file.file_id)
         audio_data = session.get(tg_file.file_path, timeout=10).content
 
+        # تحقق من حجم الملف (مثال: أقل من 5MB)
+        if len(audio_data) > 5 * 1024 * 1024:
+            context.bot.send_message(chat_id=update.effective_chat.id, 
+                                   text="❌ المقطع الصوتي كبير جدًا (الحد الأقصى: 5MB).")
+            return
+
         consent_data = {
             "fullName": f"User_{user_id}",
             "email": f"user_{user_id}@bot.com"
@@ -86,11 +92,11 @@ def handle_audio(update, context):
             'name': f'user_{user_id}_voice',
             'gender': 'male',
             'consent': json.dumps(consent_data, ensure_ascii=False),
-            'locale': 'auto'  # تمكين الكشف التلقائي عن اللغة
+            'locale': 'auto'
         }
 
         files = {
-            'sample': ('voice_sample.ogg', audio_data, 'audio/ogg'),
+            'sample': ('voice_sample.mp3', audio_data, 'audio/mp3'),  # غيّر إلى mp3
         }
 
         for key, value in data.items():
@@ -103,24 +109,31 @@ def handle_audio(update, context):
             timeout=15
         )
 
-        if response.status_code == 200:
-            voice_id = response.json().get('id')
-            user_voice_ids[user_id] = voice_id
-            context.bot.send_message(chat_id=update.effective_chat.id, 
-                                   text="✅ تم استنساخ صوتك بنجاح! يمكنك الآن إرسال النص لتحويله إلى صوت.")
-        else:
-            error_msg = response.json().get('message', 'Unknown error')
-            context.bot.send_message(chat_id=update.effective_chat.id, 
-                                   text=f"❌ خطأ في API: {error_msg}")
+        # سجّل التفاصيل للتصحيح
+        logger.info(f"API Response Status: {response.status_code}")
+        logger.info(f"API Response Text: {response.text}")
 
-    except json.JSONDecodeError:
-        logger.error("Failed to decode JSON response")
-        context.bot.send_message(chat_id=update.effective_chat.id, 
-                               text="❌ حدث خطأ في معالجة الرد من الخادم")
+        if response.status_code == 200:
+            try:
+                voice_id = response.json().get('id')
+                user_voice_ids[user_id] = voice_id
+                context.bot.send_message(chat_id=update.effective_chat.id, 
+                                       text="✅ تم استنساخ صوتك بنجاح!")
+            except json.JSONDecodeError:
+                logger.error("API returned non-JSON response")
+                context.bot.send_message(chat_id=update.effective_chat.id, 
+                                       text="❌ حدث خطأ غير متوقع من الخادم.")
+        else:
+            error_msg = f"رمز الخطأ: {response.status_code}"
+            if response.text:
+                error_msg += f" - التفاصيل: {response.text[:200]}"  # عرض جزء من الرد
+            context.bot.send_message(chat_id=update.effective_chat.id, 
+                                   text=f"❌ فشل استنساخ الصوت: {error_msg}")
+
     except Exception as e:
-        logger.error(f"Error in handle_audio: {str(e)}")
+        logger.error(f"Error in handle_audio: {str(e)}", exc_info=True)
         context.bot.send_message(chat_id=update.effective_chat.id, 
-                               text="❌ حدث خطأ غير متوقع أثناء معالجة الصوت")
+                               text="❌ حدث خطأ أثناء معالجة الصوت. يرجى المحاولة لاحقًا.")
 
 def handle_text(update, context):
     try:
