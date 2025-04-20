@@ -66,8 +66,8 @@ def handle_audio(update, context):
         data = {
             'name': f'user_{user_id}_voice',
             'gender': 'male',
-            'locale': 'ar-AE',  # تم التغيير إلى العربية الإماراتية
             'consent': json.dumps(consent_data, ensure_ascii=False)
+            # تم إزالة locale حسب الوثائق
         }
 
         files = {
@@ -122,9 +122,8 @@ def handle_text(update, context):
         payload = {
             "input": text,
             "voice_id": voice_id,
-            "output_format": "mp3",
-            "language": "ar",  # إضافة تحديد اللغة
-            "locale": "ar-AE"  # التأكد من تطابق اللغة مع الصوت المستنسخ
+            "output_format": "mp3"
+            # تم إزالة language و locale حسب الوثائق
         }
 
         response = session.post(
