@@ -66,8 +66,8 @@ def handle_audio(update, context):
         data = {
             'name': f'user_{user_id}_voice',
             'gender': 'male',
+            'model': 'simba_multilingual',  # تحديد النموذج متعدد اللغات
             'consent': json.dumps(consent_data, ensure_ascii=False)
-            # تم إزالة locale حسب الوثائق
         }
 
         files = {
@@ -122,8 +122,11 @@ def handle_text(update, context):
         payload = {
             "input": text,
             "voice_id": voice_id,
-            "output_format": "mp3"
-            # تم إزالة language و locale حسب الوثائق
+            "model": "simba_multilingual",  # تحديد النموذج هنا
+            "output_format": "mp3",
+            "options": {
+                "auto_detect_language": True  # تفعيل الاكتشاف التلقائي للغة
+            }
         }
 
         response = session.post(
