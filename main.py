@@ -6,9 +6,17 @@ from subscription import check_subscription
 def main():
     BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
     
-    updater = Updater(BOT_TOKEN, use_context=True)
+    # إعداد Updater مع exclusive=True لمنع التعارض
+    updater = Updater(
+        token=BOT_TOKEN,
+        use_context=True,
+        workers=1,
+        request_kwargs={'read_timeout': 20, 'connect_timeout': 20}
+    )
+    
     dp = updater.dispatcher
 
+    # تسجيل ال handlers
     dp.add_handler(CommandHandler("start", start.start))
     dp.add_handler(MessageHandler(
         Filters.voice | Filters.audio,
@@ -21,6 +29,7 @@ def main():
     
     dp.add_error_handler(error.error_handler)
 
+    # تشغيل البوت
     if os.getenv('WEBHOOK_MODE', 'false').lower() == 'true':
         PORT = int(os.getenv('PORT', 10000))
         WEBHOOK_URL = os.getenv('WEBHOOK_URL')
@@ -29,11 +38,16 @@ def main():
             listen="0.0.0.0",
             port=PORT,
             url_path=BOT_TOKEN,
-            webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
+            webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
+            clean=True  # يوقف أي نسخ أخرى تعمل
         )
         print(f"✅ Bot running in webhook mode on port {PORT}")
     else:
-        updater.start_polling()
+        updater.start_polling(
+            clean=True,  # يوقف أي نسخ أخرى تعمل
+            timeout=20,
+            read_latency=5
+        )
         print("✅ Bot running in polling mode")
 
     updater.idle()
