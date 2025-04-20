@@ -52,37 +52,31 @@ def handle_audio(update, context):
         
         if not file:
             context.bot.send_message(chat_id=update.effective_chat.id, 
-                                    text="الرجاء إرسال مقطع صوتي فقط (بين 10-30 ثانية).")
+                                   text="الرجاء إرسال مقطع صوتي فقط (بين 10-30 ثانية).")
             return
 
-        # الحصول على الملف الصوتي
         tg_file = context.bot.get_file(file.file_id)
         audio_data = session.get(tg_file.file_path, timeout=10).content
 
-        # تحضير بيانات الموافقة
         consent_data = {
             "fullName": f"User_{user_id}",
             "email": f"user_{user_id}@bot.com"
         }
 
-        # تحضير البيانات للطلب
         data = {
             'name': f'user_{user_id}_voice',
-            'gender': 'male',  # أو 'female' أو 'unspecified' حسب الرغبة
-            'locale': 'ar-SA',  # تغيير حسب اللغة المطلوبة
+            'gender': 'male',
+            'locale': 'ar-AE',  # تم التغيير إلى العربية الإماراتية
             'consent': json.dumps(consent_data, ensure_ascii=False)
         }
 
-        # تحضير الملفات للطلب
         files = {
             'sample': ('voice_sample.ogg', audio_data, 'audio/ogg'),
         }
 
-        # إضافة البيانات كجزء من multipart form-data
         for key, value in data.items():
             files[key] = (None, str(value))
 
-        # إرسال الطلب إلى API
         response = session.post(
             'https://api.sws.speechify.com/v1/voices',
             headers={'Authorization': f'Bearer {API_KEY}'},
@@ -90,7 +84,6 @@ def handle_audio(update, context):
             timeout=15
         )
 
-        # معالجة الرد
         if response.status_code == 200:
             voice_id = response.json().get('id')
             user_voice_ids[user_id] = voice_id
@@ -115,52 +108,48 @@ def handle_text(update, context):
         user_id = update.message.from_user.id
         text = update.message.text
 
-        if not text or len(text) > 20000:  # تحديث الحد الأقصى لـ 20,000 حرف
+        if not text or len(text) > 20000:
             context.bot.send_message(chat_id=update.effective_chat.id, 
-                                  text="الرجاء إرسال نص صالح (بين 1-20,000 حرف).")
+                                   text="الرجاء إرسال نص صالح (بين 1-20,000 حرف).")
             return
 
         voice_id = user_voice_ids.get(user_id)
         if not voice_id:
             context.bot.send_message(chat_id=update.effective_chat.id, 
-                                  text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).")
+                                   text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).")
             return
 
-        # تحضير بيانات الطلب لنقطة نهاية الـ Streaming
         payload = {
             "input": text,
             "voice_id": voice_id,
-            "output_format": "mp3"  # يمكن تغييره إلى ogg أو aac
+            "output_format": "mp3",
+            "language": "ar",  # إضافة تحديد اللغة
+            "locale": "ar-AE"  # التأكد من تطابق اللغة مع الصوت المستنسخ
         }
 
-        # إرسال الطلب إلى نقطة نهاية الـ Streaming
         response = session.post(
-            'https://api.sws.speechify.com/v1/audio/stream',  # تغيير إلى مسار الـ Streaming
+            'https://api.sws.speechify.com/v1/audio/stream',
             headers={
                 'Authorization': f'Bearer {API_KEY}',
                 'Content-Type': 'application/json',
-                'Accept': 'audio/mpeg'  # تغيير حسب التنسيق المطلوب
+                'Accept': 'audio/mpeg'
             },
             json=payload,
-            stream=True,  # تمكين وضع الـ Streaming
-            timeout=30  # زيادة المهلة للتعامل مع النصوص الطويلة
+            stream=True,
+            timeout=30
         )
 
-        # معالجة الرد
         if response.status_code == 200:
             try:
-                # إنشاء ملف مؤقت لحفظ الصوت
                 with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_audio:
                     for chunk in response.iter_content(chunk_size=4096):
                         if chunk:
                             temp_audio.write(chunk)
                     temp_audio_path = temp_audio.name
 
-                # إرسال الملف الصوتي
                 with open(temp_audio_path, 'rb') as audio_file:
                     context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio_file)
 
-                # حذف الملف المؤقت
                 os.unlink(temp_audio_path)
 
             except Exception as e:
@@ -182,6 +171,7 @@ def handle_text(update, context):
         logger.error(f"Error in handle_text: {str(e)}", exc_info=True)
         context.bot.send_message(chat_id=update.effective_chat.id, 
                                text="❌ حدث خطأ غير متوقع أثناء معالجة النص")
+
 # إضافة handlers
 dp.add_handler(CommandHandler("start", start))
 dp.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
