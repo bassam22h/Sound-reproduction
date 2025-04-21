@@ -7,17 +7,26 @@ def start(update: Update, context: CallbackContext):
     user = update.effective_user
     trials = int(os.getenv('DEFAULT_TRIALS', 2))
     max_chars = os.getenv('MAX_CHARS_PER_TRIAL', 100)
-    channels = ", ".join([f"@{c}" for c in os.getenv('REQUIRED_CHANNELS', '').split(',') if c])
+    channels = os.getenv('REQUIRED_CHANNELS', '').split(',')
     
-    welcome_msg = WELCOME_MESSAGE.format(
-        user_name=user.first_name,
-        trials=trials,
-        max_chars=max_chars,
-        channels=channels
-    )
+    # تحضير رسالة الترحيب بدون تنسيق Markdown المعقد
+    welcome_msg = f"""
+مرحباً {user.first_name}! 👋
+
+🎤 هذا البوت يمكنك من استنساخ صوتك وتحويل النص إلى صوتك الخاص.
+
+🔹 لديك {trials} محاولات مجانية
+🔹 كل محاولة بحد أقصى {max_chars} حرف
+🔹 الاستنساخ مسموح به مرة واحدة فقط
+
+📢 قنواتنا الرسمية:
+{', '.join(f'@{c.strip()}' for c in channels if c.strip())}
+
+🚀 أرسل لي مقطعاً صوتياً الآن (10-30 ثانية) لبدأ الاستنساخ!
+"""
     
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=welcome_msg,
-        parse_mode='Markdown'
+        parse_mode=None  # إلغاء تنسيق Markdown مؤقتاً
     )
