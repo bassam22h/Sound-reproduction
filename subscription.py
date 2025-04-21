@@ -1,79 +1,55 @@
-from functools import wraps
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CallbackContext
 import os
-import logging
+from functools import wraps
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from templates import messages
 
-logger = logging.getLogger(__name__)
+REQUIRED_CHANNELS = os.getenv("REQUIRED_CHANNELS", "").split(",")
 
-REQUIRED_CHANNELS = os.getenv("REQUIRED_CHANNELS", "").split(',')
+def is_user_subscribed(bot, user_id):
+    for channel in REQUIRED_CHANNELS:
+        try:
+            member = bot.get_chat_member(chat_id=channel.strip(), user_id=user_id)
+            if member.status in ['left', 'kicked']:
+                return False
+        except Exception as e:
+            print(f"Error checking membership for {channel}: {e}")
+            return False
+    return True
 
-def subscription_required(func):
+def check_subscription(func):
     @wraps(func)
-    def wrapper(update: Update, context: CallbackContext, *args, **kwargs):
-        user_id = update.effective_user.id
-        missing_channels = []
-
-        for channel in REQUIRED_CHANNELS:
-            if not channel.strip():
-                continue
-            try:
-                member = context.bot.get_chat_member(chat_id=channel.strip(), user_id=user_id)
-                if member.status not in ["member", "administrator", "creator"]:
-                    missing_channels.append(channel.strip())
-            except Exception as e:
-                logger.error(f"Error checking membership for {channel}: {e}")
-                missing_channels.append(channel.strip())
-
-        if missing_channels:
-            send_subscription_message(update, context, missing_channels)
+    def wrapper(update, context):
+        user = update.effective_user
+        if not is_user_subscribed(context.bot, user.id):
+            send_subscription_message(update, context)
             return
-        else:
-            return func(update, context, *args, **kwargs)
-
+        return func(update, context)
     return wrapper
 
-def send_subscription_message(update: Update, context: CallbackContext, channels):
+def send_subscription_message(update, context):
     keyboard = []
-
-    for channel in channels:
-        keyboard.append([InlineKeyboardButton(f"اشترك في {channel}", url=f"https://t.me/{channel.lstrip('@')}")])
-
+    for channel in REQUIRED_CHANNELS:
+        btn = InlineKeyboardButton(f"اشترك في {channel.strip()}", url=f"https://t.me/{channel.strip().lstrip('@')}")
+        keyboard.append([btn])
     keyboard.append([InlineKeyboardButton("✅ تأكيد الاشتراك", callback_data="verify_subscription")])
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    channels_list = "\n".join([f"➡️ {channel}" for channel in channels])
-
-    text = messages.SUBSCRIPTION_REQUIRED.format(channels_list=channels_list)
+    channels_list = "\n".join([f"• @{channel.strip().lstrip('@')}" for channel in REQUIRED_CHANNELS])
 
     try:
-        if update.message:
-            update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
-        elif update.callback_query:
-            update.callback_query.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+        update.message.reply_text(
+            messages.SUBSCRIPTION_REQUIRED.format(channels_list=channels_list),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
     except Exception as e:
-        logger.error(f"Error sending subscription message: {e}")
+        print(f"Error sending subscription message: {e}")
 
-def verify_subscription(update: Update, context: CallbackContext):
+def verify_subscription(update, context):
     query = update.callback_query
-    user_id = query.from_user.id
-    missing_channels = []
-
-    for channel in REQUIRED_CHANNELS:
-        if not channel.strip():
-            continue
-        try:
-            member = context.bot.get_chat_member(chat_id=channel.strip(), user_id=user_id)
-            if member.status not in ["member", "administrator", "creator"]:
-                missing_channels.append(channel.strip())
-        except Exception as e:
-            logger.error(f"Error verifying membership for {channel}: {e}")
-            missing_channels.append(channel.strip())
-
-    if missing_channels:
-        send_subscription_message(update, context, missing_channels)
-    else:
-        query.answer("✅ تم التحقق من اشتراكك! يمكنك الآن استخدام البوت.", show_alert=True)
+    user = query.from_user
+    if is_user_subscribed(context.bot, user.id):
+        query.answer("تم التحقق ✅ يمكنك استخدام البوت الآن")
         query.message.delete()
+    else:
+        query.answer("❌ لم يتم العثور على اشتراكك، يرجى الاشتراك أولاً", show_alert=True)
