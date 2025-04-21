@@ -3,6 +3,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 import os
 import logging
+from templates import messages
 
 logger = logging.getLogger(__name__)
 
@@ -39,19 +40,19 @@ def send_subscription_message(update: Update, context: CallbackContext, channels
     for channel in channels:
         keyboard.append([InlineKeyboardButton(f"اشترك في {channel}", url=f"https://t.me/{channel.lstrip('@')}")])
 
-    keyboard.append([InlineKeyboardButton("✅ تحقّق من الاشتراك", callback_data="verify_subscription")])
+    keyboard.append([InlineKeyboardButton("✅ تأكيد الاشتراك", callback_data="verify_subscription")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    text = (
-        "⚠️ لا يمكنك استخدام البوت قبل الاشتراك في القنوات التالية:\n\n"
-        "انضم ثم اضغط على زر 'تحقّق من الاشتراك' بالأسفل.\n"
-    )
+    channels_list = "\n".join([f"➡️ {channel}" for channel in channels])
+
+    text = messages.SUBSCRIPTION_REQUIRED.format(channels_list=channels_list)
+
     try:
         if update.message:
-            update.message.reply_text(text, reply_markup=reply_markup)
+            update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
         elif update.callback_query:
-            update.callback_query.message.reply_text(text, reply_markup=reply_markup)
+            update.callback_query.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
     except Exception as e:
         logger.error(f"Error sending subscription message: {e}")
 
