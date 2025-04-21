@@ -9,7 +9,7 @@ from database import get_user_data, update_characters_used
 
 logger = logging.getLogger(__name__)
 
-async def handle_text(update: Update, context: CallbackContext):
+def handle_text(update: Update, context: CallbackContext):
     try:
         user_id = update.effective_user.id
         text = update.message.text
