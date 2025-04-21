@@ -17,19 +17,21 @@ class SubscriptionManager:
             if channel.strip()
         ]
 
+    def check_permissions(self, user_id, context=None):
+        """
+        التحقق الشامل من الصلاحيات (القنوات + الاستخدام)
+        """
+        if not self.check_required_channels(user_id, context):
+            return False
+        return True
+
     def check_required_channels(self, user_id, context=None):
-        """
-        التحقق من اشتراك المستخدم في القنوات المطلوبة
-        Returns:
-            bool: True إذا كان مشتركاً أو لا توجد قنوات مطلوبة
-        """
         if not self.REQUIRED_CHANNELS:
             return True
 
         try:
             for channel in self.REQUIRED_CHANNELS:
                 try:
-                    # إضافة @ تلقائياً إذا لم تكن موجودة
                     chat_id = f"@{channel}" if not channel.startswith('@') else channel
                     member = context.bot.get_chat_member(
                         chat_id=chat_id,
@@ -48,23 +50,21 @@ class SubscriptionManager:
             return True
 
     def _send_channel_alert(self, user_id, context):
-        """إرسال رسالة تنبيه للانضمام إلى القنوات"""
         if not context:
             return
 
         try:
-            # بناء الرسالة بدون Markdown لتجنب مشاكل التحليل
             channels_list = "\n".join([f"- @{channel}" for channel in self.REQUIRED_CHANNELS])
             message = (
-                "يجب الانضمام إلى القنوات التالية أولاً:\n"
+                "⚠️ يجب الانضمام إلى القنوات التالية أولاً:\n"
                 f"{channels_list}\n\n"
-                "بعد الانضمام، أرسل /start مرة أخرى"
+                "بعد الانضمام، يمكنك إعادة المحاولة"
             )
             
             context.bot.send_message(
                 chat_id=user_id,
                 text=message,
-                parse_mode=None  # إلغاء وضع Markdown
+                parse_mode=None
             )
         except Exception as e:
             logger.error(f"Failed to send alert: {str(e)}")
