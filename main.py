@@ -139,24 +139,51 @@ class VoiceCloneBot:
         )
         
     def handle_audio(self, update, context):
-        user_id = update.effective_user.id
-        if not self.subscription.check_audio_permission(user_id, context):
+    user_id = update.effective_user.id
+    
+    # التحقق من الصلاحيات
+    if not self.subscription.check_voice_permission(user_id, context):
+        return
+        
+    try:
+        file = update.message.voice or update.message.audio
+        
+        if not file:
+            context.bot.send_message(
+                chat_id=update.effective_chat.id, 
+                text="⚠️ الرجاء إرسال مقطع صوتي فقط (بين 10-30 ثانية)."
+            )
             return
-            
-        try:
-            file = update.message.voice or update.message.audio
-            
-            if not file:
-                context.bot.send_message(
-                    chat_id=update.effective_chat.id, 
-                    text="⚠️ الرجاء إرسال مقطع صوتي فقط (بين 10-30 ثانية)."
-                )
-                return
 
             # تحميل الملف الصوتي
             tg_file = context.bot.get_file(file.file_id)
             audio_data = self.session.get(tg_file.file_path, timeout=10).content
 
+         if response.status_code == 200:
+            voice_id = response.json().get('id')
+            voice_data = {
+                'voice_id': voice_id,
+                'timestamp': {'.sv': 'timestamp'},
+                'status': 'active'
+            }
+            
+            # حفظ البيانات في Firebase
+            if self.premium.check_premium_status(user_id):
+                if not self.premium.record_voice_change(user_id):
+                    context.bot.send_message(
+                        chat_id=update.effective_chat.id,
+                        text="⚠️ لقد استنفذت عدد مرات تغيير الصوت المسموحة",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                    return
+                    
+            self.firebase.update_voice_clone(user_id, voice_data)
+            
+            context.bot.send_message(
+                chat_id=update.effective_chat.id, 
+                text="✅ *تم استنساخ صوتك بنجاح!*",
+                parse_mode=ParseMode.MARKDOWN
+            )
             # إعداد بيانات الموافقة
             consent_data = {
                 "fullName": f"User_{user_id}",
