@@ -19,75 +19,78 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# إنشاء تطبيق Flask في المستوى الأعلى
+# إنشاء تطبيق Flask
 app = Flask(__name__)
 
-# متغيرات عالمية
+# كائنات عامة سيتم تهيئتها لاحقاً
 bot = None
+updater = None
 dp = None
 session = None
 firebase = None
 subscription = None
 admin = None
-API_KEY = None
 
-class VoiceCloneBot:
-    def __init__(self):
-        global bot, dp, session, firebase, subscription, admin, API_KEY
-        
-        self.setup_requests_session()
-        firebase = FirebaseManager()
-        subscription = SubscriptionManager(firebase)
-        admin = AdminPanel(firebase)
-        
-        self.BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-        API_KEY = os.getenv('SPEECHIFY_API_KEY')
-        self.WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-        
-        bot = Bot(token=self.BOT_TOKEN)
-        self.updater = Updater(bot=bot, use_context=True)
-        dp = self.updater.dispatcher
-        
-        self.register_handlers()
-        self.set_webhook()
-
-    def set_webhook(self):
-        try:
-            # حذف أي ويب هوك موجود مسبقاً
-            bot.delete_webhook()
-            
-            # تعيين الويب هوك الجديد
-            webhook_url = f"{self.WEBHOOK_URL}/{self.BOT_TOKEN}"
-            result = bot.set_webhook(url=webhook_url)
-            
-            if result:
-                logger.info(f"✅ تم تعيين الويب هوك بنجاح: {webhook_url}")
-            else:
-                logger.error("❌ فشل في تعيين الويب هوك")
-        except Exception as e:
-            logger.error(f"🚨 خطأ في تعيين الويب هوك: {str(e)}")
-
-    def setup_requests_session(self):
-        global session
-        session = requests.Session()
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[500, 502, 503, 504]
-        )
-        adapter = HTTPAdapter(
-            max_retries=retry_strategy,
-            pool_connections=10,
-            pool_maxsize=10
-        )
-        session.mount("https://", adapter)
+def initialize_bot():
+    global bot, updater, dp, session, firebase, subscription, admin
     
-    def register_handlers(self):
-        dp.add_handler(CommandHandler("start", self.start))
-        dp.add_handler(CommandHandler("help", self.help))
-        dp.add_handler(CommandHandler("stats", self.stats))
-        dp.add_handler(MessageHandler(Filters.voice | Filters.audio, self.handle_audio))
-        dp.add_handler(MessageHandler(Filters.text & ~Filters.command, self.handle_text))
+    # 1. إعداد اتصال requests
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[500, 502, 503, 504]
+    )
+    adapter = HTTPAdapter(
+        max_retries=retry_strategy,
+        pool_connections=10,
+        pool_maxsize=10
+    )
+    session.mount("https://", adapter)
+    
+    # 2. إعداد Firebase والإدارة
+    firebase = FirebaseManager()
+    subscription = SubscriptionManager(firebase)
+    admin = AdminPanel(firebase)
+    
+    # 3. إعداد بوت التليجرام
+    BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+    bot = Bot(token=BOT_TOKEN)
+    updater = Updater(bot=bot, use_context=True)
+    dp = updater.dispatcher
+    
+    # 4. تسجيل المعالجات
+    register_handlers()
+    
+    # 5. تعيين ويب هوك
+    set_webhook(BOT_TOKEN)
+    
+    return app
+
+def register_handlers():
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("help", help))
+    dp.add_handler(CommandHandler("stats", stats))
+    dp.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
+
+def set_webhook(bot_token):
+    try:
+        WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+        webhook_url = f"{WEBHOOK_URL}/{bot_token}"
+        
+        # حذف أي ويب هوك موجود مسبقاً
+        bot.delete_webhook()
+        
+        # تعيين الويب هوك الجديد
+        result = bot.set_webhook(url=webhook_url)
+        
+        if result:
+            logger.info(f"✅ تم تعيين الويب هوك بنجاح: {webhook_url}")
+        else:
+            logger.error("❌ فشل في تعيين الويب هوك")
+    except Exception as e:
+        logger.error(f"🚨 خطأ في تعيين الويب هوك: {str(e)}") 
         
     def start(self, update, context):
         user_id = update.effective_user.id
@@ -363,7 +366,7 @@ def webhook():
         dp.process_update(update)
         return jsonify({'status': 'ok'}), 200
     except Exception as e:
-        logger.error(f"Webhook error: {str(e)}")
+        logger.error(f"Webhook error: {str(e)}", exc_info=True)
         return jsonify({'status': 'error'}), 500
 
 @app.route('/')
@@ -371,19 +374,9 @@ def index():
     return 'Bot is running!'
 
 def create_app():
-    # إنشاء كائن البوت الذي سيقوم بتهيئة كل شيء
-    VoiceCloneBot()
-    return app
+    return initialize_bot()
 
 if __name__ == '__main__':
-    # إنشاء التطبيق
     app = create_app()
-    
-    # تشغيل الخادم
     port = int(os.environ.get('PORT', 10000))
-    app.run(
-        host='0.0.0.0',
-        port=port,
-        debug=False,
-        use_reloader=False
-    )
+    app.run(host='0.0.0.0', port=port, debug=False)
