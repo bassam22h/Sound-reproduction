@@ -44,20 +44,20 @@ class VoiceCloneBot:
         self.set_webhook()
 
     def set_webhook(self):
-    try:
+        try:
         # حذف أي ويب هوك موجود مسبقاً
-        self.bot.delete_webhook()
+            self.bot.delete_webhook()
         
         # تعيين الويب هوك الجديد
-        webhook_url = f"{self.WEBHOOK_URL}/{self.BOT_TOKEN}"
-        result = self.bot.set_webhook(url=webhook_url)
+            webhook_url = f"{self.WEBHOOK_URL}/{self.BOT_TOKEN}"
+            result = self.bot.set_webhook(url=webhook_url)
         
-        if result:
-            logger.info(f"تم تعيين الويب هوك بنجاح: {webhook_url}")
-        else:
-            logger.error("فشل في تعيين الويب هوك")
-    except Exception as e:
-        logger.error(f"خطأ في تعيين الويب هوك: {str(e)}")
+            if result:
+                logger.info(f"تم تعيين الويب هوك بنجاح: {webhook_url}")
+            else:
+                logger.error("فشل في تعيين الويب هوك")
+        except Exception as e:
+            logger.error(f"خطأ في تعيين الويب هوك: {str(e)}")
 
     def setup_requests_session(self):
         self.session = requests.Session()
