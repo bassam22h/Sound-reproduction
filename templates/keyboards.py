@@ -1,6 +1,15 @@
 import os
 from telegram import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 
+def get_channels_keyboard():
+    """لوحة مفاتيح متابعة القنوات مع زر التحقق"""
+    channels = [c.strip() for c in os.getenv('REQUIRED_CHANNELS', '').split(',') if c.strip()]
+    buttons = [
+        [InlineKeyboardButton(f"اشترك في @{channel}", url=f"https://t.me/{channel.lstrip('@')}")]
+        for channel in channels
+    ]
+    buttons.append([InlineKeyboardButton("✅ لقد اشتركت", callback_data="verify_subscription")])
+    return InlineKeyboardMarkup(buttons)
 def get_main_keyboard():
     """لوحة المفاتيح الرئيسية"""
     return ReplyKeyboardMarkup([
