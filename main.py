@@ -3,14 +3,16 @@ import os
 import logging
 import json
 from flask import Flask, request, jsonify
-from telegram import Bot, Update, ParseMode
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Dispatcher
+from telegram import Bot, Update, ParseMode, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Dispatcher, CallbackQueryHandler
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from firebase import FirebaseManager
 from subscription import SubscriptionManager
 from admin import AdminPanel
+from premium import PremiumManager
+from datetime import datetime
 
 # إعدادات التسجيل
 logging.basicConfig(
@@ -30,10 +32,11 @@ session = None
 firebase = None
 subscription = None
 admin = None
+premium = None
 API_KEY = None
 
 def initialize_bot():
-    global bot, updater, dp, session, firebase, subscription, admin, API_KEY
+    global bot, updater, dp, session, firebase, subscription, admin, premium, API_KEY
     
     # 1. إعداد اتصال requests
     session = requests.Session()
@@ -52,7 +55,8 @@ def initialize_bot():
     # 2. إعداد Firebase والإدارة
     firebase = FirebaseManager()
     subscription = SubscriptionManager(firebase)
-    admin = AdminPanel(firebase)
+    premium = PremiumManager(firebase)
+    admin = AdminPanel(firebase, premium)
     
     # 3. إعداد بوت التليجرام
     BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -75,11 +79,22 @@ def initialize_bot():
     return app
 
 def register_handlers():
+    # الأوامر الأساسية
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
     dp.add_handler(CommandHandler("stats", stats))
+    dp.add_handler(CommandHandler("admin", lambda u,c: admin_command(u,c, admin)))
+    dp.add_handler(CommandHandler("premium", premium_info))
+    
+    # معالجات الرسائل
     dp.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
+    
+    # معالجات الضغطات
+    dp.add_handler(CallbackQueryHandler(
+        lambda u,c: handle_admin_actions(u,c, admin, premium),
+        pattern="^admin_"
+    ))
 
 def set_webhook(bot_token, webhook_url):
     try:
@@ -96,7 +111,7 @@ def set_webhook(bot_token, webhook_url):
 # ========== دوال معالجة الأوامر ==========
 def start(update, context):
     user_id = update.effective_user.id
-    if not subscription.check_required_channels(user_id, context):
+    if not subscription.check_all_limits(user_id, context):
         return
         
     welcome_msg = """
@@ -107,8 +122,8 @@ def start(update, context):
     - حول النص إلى صوت باستخدام صوتك المستنسخ
     
     ⚠️ *القيود المفروضة:*
-    - حد مجاني: 2 طلب لكل مستخدم
-    - 100 حرف كحد أقصى لكل طلب
+    - 500 حرف كحد أقصى للمجانيين
+    - استنساخ صوت مرة واحدة للمجانيين
     
     أرسل /help للمزيد من المعلومات
     """
@@ -124,11 +139,11 @@ def start(update, context):
         'username': update.effective_user.username,
         'full_name': update.effective_user.full_name,
         'usage': {
-            'requests': 0,
-            'chars_used': 0
+            'total_chars': 0,
+            'voice_cloned': False
         }
     }
-    firebase.save_user_data(user_id, 'metadata', user_data)
+    firebase.save_user_data(user_id, user_data)
 
 def help(update, context):
     help_msg = """
@@ -138,11 +153,10 @@ def help(update, context):
     2. بعد نجاح الاستنساخ، أرسل النص الذي تريد تحويله إلى صوت
     
     ⚠️ *ملاحظات مهمة:*
-    - يجب أن يكون المقطع الصوتي واضحاً
-    - الحد الأقصى للنص 100 حرف في النسخة المجانية
-    - يمكنك استخدام البوت مرتين فقط مجاناً
+    - الحد الأقصى 500 حرف للمستخدمين المجانيين
+    - استنساخ صوت مرة واحدة فقط للمجانيين
     
-    💰 *للترقية إلى الإصدار المدفوع:* راسل الإدارة
+    💰 *للترقية إلى الإصدار المدفوع:* /premium
     """
     context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -164,7 +178,8 @@ def stats(update, context):
     📊 *إحصائيات البوت:*
     
     👥 عدد المستخدمين: {stats['total_users']}
-    📨 عدد الطلبات: {stats['total_requests']}
+    💎 المشتركون المميزون: {stats['premium_users']}
+    📨 إجمالي الطلبات: {stats['total_requests']}
     """
     context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -172,10 +187,45 @@ def stats(update, context):
         parse_mode=ParseMode.MARKDOWN
     )
 
+def admin_command(update, context, admin):
+    if admin.is_admin(update.effective_user.id):
+        update.message.reply_text(
+            "👨‍💻 لوحة تحكم المشرفين",
+            reply_markup=admin.get_admin_dashboard()
+        )
+
+def premium_info(update, context):
+    user_id = update.effective_user.id
+    update.message.reply_text(
+        premium.get_info_message(user_id),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=premium.get_payment_keyboard()
+    )
+
+def handle_admin_actions(update, context, admin, premium):
+    query = update.callback_query
+    action = query.data.split('_')[1]
+    
+    if action == "stats":
+        query.edit_message_text(admin.get_stats(), parse_mode=ParseMode.MARKDOWN)
+    elif action == "activate":
+        user_id = int(query.data.split('_')[2])
+        if premium.activate_premium(user_id, update.effective_user.id):
+            query.edit_message_text(f"✅ تم تفعيل الاشتراك للمستخدم {user_id}")
+        else:
+            query.answer("❌ فشل في التفعيل")
+    elif action == "broadcast":
+        context.user_data['awaiting_broadcast'] = True
+        query.edit_message_text("📢 أرسل الآن الرسالة التي تريد بثها:")
+    elif action == "cancel":
+        if 'awaiting_broadcast' in context.user_data:
+            del context.user_data['awaiting_broadcast']
+        query.edit_message_text("تم الإلغاء")
+
 # ========== معالجة الرسائل ==========
 def handle_audio(update, context):
     user_id = update.effective_user.id
-    if not subscription.check_permissions(user_id, context):
+    if not subscription.check_all_limits(user_id, context):
         return
 
     try:
@@ -191,23 +241,17 @@ def handle_audio(update, context):
         tg_file = context.bot.get_file(file.file_id)
         audio_data = session.get(tg_file.file_path, timeout=10).content
 
-        # إعداد بيانات الموافقة
-        consent_data = {
-            "fullName": f"User_{user_id}",
-            "email": f"user_{user_id}@bot.com"
-        }
-
         # إعداد بيانات الطلب
         data = {
             'name': f'user_{user_id}_voice',
             'gender': 'male',
-            'consent': json.dumps(consent_data, ensure_ascii=False)
+            'consent': json.dumps({
+                "fullName": f"User_{user_id}",
+                "email": f"user_{user_id}@bot.com"
+            }, ensure_ascii=False)
         }
 
-        files = {
-            'sample': ('voice_sample.ogg', audio_data, 'audio/ogg'),
-        }
-
+        files = {'sample': ('voice_sample.ogg', audio_data, 'audio/ogg')}
         for key, value in data.items():
             files[key] = (None, str(value))
 
@@ -227,16 +271,12 @@ def handle_audio(update, context):
                 'status': 'active'
             }
             
-            if hasattr(subscription, 'premium') and subscription.premium.check_premium_status(user_id):
-                if not subscription.premium.record_voice_change(user_id):
-                    context.bot.send_message(
-                        chat_id=update.effective_chat.id,
-                        text="⚠️ لقد استنفذت عدد مرات تغيير الصوت المسموحة",
-                        parse_mode=ParseMode.MARKDOWN
-                    )
-                    return
-                    
-            firebase.update_voice_clone(user_id, voice_data)
+            # تحديث حالة المستخدم
+            firebase.ref.child('users').child(str(user_id)).update({
+                'voice': voice_data,
+                'voice_cloned': True,
+                'last_voice_clone': {'.sv': 'timestamp'}
+            })
             
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
@@ -262,7 +302,8 @@ def handle_text(update, context):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if not subscription.check_permissions(user_id, context):
+    # التحقق من جميع الحدود
+    if not subscription.check_all_limits(user_id, context, len(text)):
         return
 
     try:
@@ -277,6 +318,7 @@ def handle_text(update, context):
             )
             return
 
+        # إعداد الطلب
         payload = {
             "input": text,
             "voice_id": voice_id,
@@ -297,44 +339,33 @@ def handle_text(update, context):
         )
 
         if response.status_code == 200:
-            try:
-                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_audio:
-                    for chunk in response.iter_content(chunk_size=4096):
-                        if chunk:
-                            temp_audio.write(chunk)
-                    temp_audio_path = temp_audio.name
+            # معالجة الصوت
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_audio:
+                for chunk in response.iter_content(chunk_size=4096):
+                    if chunk:
+                        temp_audio.write(chunk)
+                temp_audio_path = temp_audio.name
 
-                with open(temp_audio_path, 'rb') as audio_file:
-                    context.bot.send_voice(
-                        chat_id=update.effective_chat.id,
-                        voice=audio_file
-                    )
+            # إرسال الصوت
+            with open(temp_audio_path, 'rb') as audio_file:
+                context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio_file)
 
-                firebase.increment_usage(user_id, len(text))
-                
-                remaining = subscription.get_remaining_chars(user_id)
-                context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=f"📊 *الأحرف المستخدمة:* {len(text)}\n*المتبقي لك:* {remaining}",
-                    parse_mode=ParseMode.MARKDOWN
-                )
+            # تحديث الاستخدام
+            subscription.update_usage(user_id, len(text))
+            
+            # إرسال ملخص الاستخدام
+            user_data = firebase.get_user_data(user_id)
+            remaining = max(0, int(os.getenv('FREE_CHAR_LIMIT', 500)) - user_data.get('usage', {}).get('total_chars', 0)
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"📊 *الأحرف المستخدمة:* {len(text)}\n*المتبقي لك:* {remaining}",
+                parse_mode=ParseMode.MARKDOWN
+            )
 
-                os.unlink(temp_audio_path)
-
-            except Exception as e:
-                logger.error(f"Streaming audio processing error: {str(e)}", exc_info=True)
-                context.bot.send_message(
-                    chat_id=update.effective_chat.id, 
-                    text="❌ حدث خطأ أثناء معالجة الصوت المتدفق"
-                )
+            os.unlink(temp_audio_path)
 
         else:
-            try:
-                error_data = response.json()
-                error_msg = error_data.get('message', response.text)
-            except json.JSONDecodeError:
-                error_msg = response.text
-                
+            error_msg = response.json().get('message', response.text)
             context.bot.send_message(
                 chat_id=update.effective_chat.id, 
                 text=f"❌ *خطأ في تحويل النص:* {error_msg}",
