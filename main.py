@@ -1,7 +1,7 @@
 import os
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 from handlers import start, audio, text, error
-from subscription import check_subscription
+from subscription import subscription_required
 
 def main():
     BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -11,11 +11,6 @@ def main():
     updater = Updater(token=BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
-    dp.add_handler(CallbackQueryHandler(
-        check_subscription,
-        pattern="check_subscription"
-    ))
-
     dp.add_handler(CommandHandler(
         "start",
         start.start
@@ -23,12 +18,12 @@ def main():
 
     dp.add_handler(MessageHandler(
         Filters.voice | Filters.audio,
-        check_subscription(audio.handle_audio)
+        subscription_required(audio.handle_audio)
     ))
 
     dp.add_handler(MessageHandler(
         Filters.text & ~Filters.command,
-        check_subscription(text.handle_text)
+        subscription_required(text.handle_text)
     ))
 
     dp.add_error_handler(error.error_handler)
@@ -47,7 +42,7 @@ def main():
         print(f"✅ البوت يعمل على الويب هوك (البورت: {PORT})")
     else:
         updater.start_polling()
-        print("✅ البوت يعمل في وضع البولينج (للتطوير فقط)")
+        print("✅ البوت يعمل في وضع البولينج")
 
     updater.idle()
 
