@@ -29,17 +29,17 @@ class SubscriptionManager:
         try:
             for channel in self.REQUIRED_CHANNELS:
                 try:
-                    # أضف @ تلقائياً هنا فقط
-                    chat_id = f"@{channel}" 
+                    # إضافة @ تلقائياً إذا لم تكن موجودة
+                    chat_id = f"@{channel}" if not channel.startswith('@') else channel
                     member = context.bot.get_chat_member(
-                        chat_id=chat_id,  # الآن سيتم استخدام @aitools_ar
+                        chat_id=chat_id,
                         user_id=user_id
                     )
                     if member.status in ['left', 'kicked']:
                         self._send_channel_alert(user_id, context)
                         return False
                 except TelegramError as e:
-                    logger.error(f"Failed to check channel @{channel}: {str(e)}")
+                    logger.error(f"Failed to check channel {channel}: {str(e)}")
                     continue
 
             return True
@@ -52,21 +52,22 @@ class SubscriptionManager:
         if not context:
             return
 
-        channels_list = "\n".join([f"• @{channel}" for channel in self.REQUIRED_CHANNELS])
-        message = (
-            "⚠️ *يجب الانضمام إلى القنوات التالية أولاً:*\n"
-            f"{channels_list}\n\n"
-            "بعد الانضمام، أرسل /start مرة أخرى"
-        )
-        
         try:
+            # بناء الرسالة بدون Markdown لتجنب مشاكل التحليل
+            channels_list = "\n".join([f"- @{channel}" for channel in self.REQUIRED_CHANNELS])
+            message = (
+                "يجب الانضمام إلى القنوات التالية أولاً:\n"
+                f"{channels_list}\n\n"
+                "بعد الانضمام، أرسل /start مرة أخرى"
+            )
+            
             context.bot.send_message(
                 chat_id=user_id,
                 text=message,
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=None  # إلغاء وضع Markdown
             )
-        except TelegramError as e:
-            logger.error(f"Failed to send channel alert: {str(e)}")
+        except Exception as e:
+            logger.error(f"Failed to send alert: {str(e)}")
 
     def check_voice_permission(self, user_id, context=None):
         """التحقق من إذن استنساخ الصوت"""
@@ -105,7 +106,8 @@ class SubscriptionManager:
                 context.bot.send_message(
                     chat_id=user_id,
                     text="⚠️ لقد قمت بالفعل باستنساخ صوتك سابقاً",
-                    parse_mode=ParseMode.MARKDOWN)
+                    parse_mode=ParseMode.MARKDOWN
+                )
             return False
         return True
         
@@ -119,7 +121,8 @@ class SubscriptionManager:
                 context.bot.send_message(
                     chat_id=user_id,
                     text=f"⚠️ تجاوزت الحد المسموح ({self.MAX_FREE_CHARS} حرف)",
-                    parse_mode=ParseMode.MARKDOWN)
+                    parse_mode=ParseMode.MARKDOWN
+                )
             return False
             
         if (usage.get('requests', 0) >= self.MAX_FREE_TRIALS and 
@@ -128,7 +131,8 @@ class SubscriptionManager:
                 context.bot.send_message(
                     chat_id=user_id,
                     text="⚠️ لقد استنفذت محاولاتك المجانية",
-                    parse_mode=ParseMode.MARKDOWN)
+                    parse_mode=ParseMode.MARKDOWN
+                )
             return False
             
         return True
