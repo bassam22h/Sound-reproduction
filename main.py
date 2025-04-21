@@ -139,94 +139,94 @@ class VoiceCloneBot:
         )
         
     def handle_audio(self, update, context):
-    user_id = update.effective_user.id
-    
-    # التحقق من الصلاحيات
-    if not self.subscription.check_voice_permission(user_id, context):
-        return  # يجب أن يكون داخل الدالة وبمسافة بادئة صحيحة
-        
-    try:
-        file = update.message.voice or update.message.audio
-        
-        if not file:
-            context.bot.send_message(
-                chat_id=update.effective_chat.id, 
-                text="⚠️ الرجاء إرسال مقطع صوتي فقط (بين 10-30 ثانية)."
-            )
-            return  # يجب أن يكون داخل كتلة if
+        user_id = update.effective_user.id
 
-        # تحميل الملف الصوتي
-        tg_file = context.bot.get_file(file.file_id)
-        audio_data = self.session.get(tg_file.file_path, timeout=10).content
+        # التحقق من الصلاحيات
+        if not self.subscription.check_voice_permission(user_id, context):
+            return
 
-        # إعداد بيانات الموافقة
-        consent_data = {
-            "fullName": f"User_{user_id}",
-            "email": f"user_{user_id}@bot.com"
-        }
+        try:
+            file = update.message.voice or update.message.audio
 
-        # إعداد بيانات الطلب
-        data = {
-            'name': f'user_{user_id}_voice',
-            'gender': 'male',
-            'consent': json.dumps(consent_data, ensure_ascii=False)
-        }
+            if not file:
+                context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="⚠️ الرجاء إرسال مقطع صوتي فقط (بين 10-30 ثانية)."
+                )
+                return
 
-        files = {
-            'sample': ('voice_sample.ogg', audio_data, 'audio/ogg'),
-        }
+            # تحميل الملف الصوتي
+            tg_file = context.bot.get_file(file.file_id)
+            audio_data = self.session.get(tg_file.file_path, timeout=10).content
 
-        for key, value in data.items():
-            files[key] = (None, str(value))
-
-        # إرسال الطلب إلى API
-        response = self.session.post(
-            'https://api.sws.speechify.com/v1/voices',
-            headers={'Authorization': f'Bearer {self.API_KEY}'},
-            files=files,
-            timeout=15
-        )
-
-        if response.status_code == 200:
-            voice_id = response.json().get('id')
-            
-            # حفظ البيانات في Firebase
-            voice_data = {
-                'voice_id': voice_id,
-                'timestamp': {'.sv': 'timestamp'},
-                'status': 'active'
+            # إعداد بيانات الموافقة
+            consent_data = {
+                "fullName": f"User_{user_id}",
+                "email": f"user_{user_id}@bot.com"
             }
-            
-            if self.premium.check_premium_status(user_id):
-                if not self.premium.record_voice_change(user_id):
-                    context.bot.send_message(
-                        chat_id=update.effective_chat.id,
-                        text="⚠️ لقد استنفذت عدد مرات تغيير الصوت المسموحة",
-                        parse_mode=ParseMode.MARKDOWN
-                    )
-                    return
-                    
-            self.firebase.update_voice_clone(user_id, voice_data)
-            
-            context.bot.send_message(
-                chat_id=update.effective_chat.id, 
-                text="✅ *تم استنساخ صوتك بنجاح!*",
-                parse_mode=ParseMode.MARKDOWN
-            )
-        else:
-            error_msg = response.json().get('message', 'Unknown error')
-            context.bot.send_message(
-                chat_id=update.effective_chat.id, 
-                text=f"❌ *خطأ في API:* {error_msg}",
-                parse_mode=ParseMode.MARKDOWN
+
+            # إعداد بيانات الطلب
+            data = {
+                'name': f'user_{user_id}_voice',
+                'gender': 'male',
+                'consent': json.dumps(consent_data, ensure_ascii=False)
+            }
+
+            files = {
+                'sample': ('voice_sample.ogg', audio_data, 'audio/ogg'),
+            }
+
+            for key, value in data.items():
+                files[key] = (None, str(value))
+
+            # إرسال الطلب إلى API
+            response = self.session.post(
+                'https://api.sws.speechify.com/v1/voices',
+                headers={'Authorization': f'Bearer {self.API_KEY}'},
+                files=files,
+                timeout=15
             )
 
-    except Exception as e:  # تم تصحيح كتلة except المكررة
-        logger.error(f"Error in handle_audio: {str(e)}")
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, 
-            text="❌ حدث خطأ غير متوقع أثناء معالجة الصوت"
-        )
+            if response.status_code == 200:
+                voice_id = response.json().get('id')
+
+                # حفظ البيانات في Firebase
+                voice_data = {
+                    'voice_id': voice_id,
+                    'timestamp': {'.sv': 'timestamp'},
+                    'status': 'active'
+                }
+
+                if self.premium.check_premium_status(user_id):
+                    if not self.premium.record_voice_change(user_id):
+                        context.bot.send_message(
+                            chat_id=update.effective_chat.id,
+                            text="⚠️ لقد استنفذت عدد مرات تغيير الصوت المسموحة",
+                            parse_mode=ParseMode.MARKDOWN
+                        )
+                        return
+
+                self.firebase.update_voice_clone(user_id, voice_data)
+
+                context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="✅ *تم استنساخ صوتك بنجاح!*",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            else:
+                error_msg = response.json().get('message', 'Unknown error')
+                context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=f"❌ *خطأ في API:* {error_msg}",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+
+        except Exception as e:
+            logger.error(f"Error in handle_audio: {str(e)}")
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="❌ حدث خطأ غير متوقع أثناء معالجة الصوت"
+            )
             
     def handle_text(self, update, context):
         user_id = update.effective_user.id
