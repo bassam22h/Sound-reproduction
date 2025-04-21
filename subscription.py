@@ -18,32 +18,34 @@ class SubscriptionManager:
         ]
 
     def check_required_channels(self, user_id, context=None):
-        """
-        التحقق من اشتراك المستخدم في القنوات المطلوبة
-        Returns:
-            bool: True إذا كان مشتركاً أو لا توجد قنوات مطلوبة
-        """
-        if not self.REQUIRED_CHANNELS:
-            return True
+    """
+    التحقق من اشتراك المستخدم في القنوات المطلوبة
+    Returns:
+        bool: True إذا كان مشتركاً أو لا توجد قنوات مطلوبة
+    """
+    if not self.REQUIRED_CHANNELS:
+        return True
 
-        try:
-            for channel in self.REQUIRED_CHANNELS:
-                try:
-                    member = context.bot.get_chat_member(
-                        chat_id=channel, 
-                        user_id=user_id
-                    )
-                    if member.status in ['left', 'kicked']:
-                        self._send_channel_alert(user_id, context)
-                        return False
-                except TelegramError as e:
-                    logger.error(f"Failed to check channel {channel}: {str(e)}")
-                    continue
+    try:
+        for channel in self.REQUIRED_CHANNELS:
+            try:
+                # أضف @ تلقائياً هنا فقط
+                chat_id = f"@{channel}" 
+                member = context.bot.get_chat_member(
+                    chat_id=chat_id,  # الآن سيتم استخدام @aitools_ar
+                    user_id=user_id
+                )
+                if member.status in ['left', 'kicked']:
+                    self._send_channel_alert(user_id, context)
+                    return False
+            except TelegramError as e:
+                logger.error(f"Failed to check channel @{channel}: {str(e)}")
+                continue
 
-            return True
-        except Exception as e:
-            logger.error(f"Error in check_required_channels: {str(e)}")
-            return True
+        return True
+    except Exception as e:
+        logger.error(f"Error in check_required_channels: {str(e)}")
+        return True
 
     def _send_channel_alert(self, user_id, context):
         """إرسال رسالة تنبيه للانضمام إلى القنوات"""
