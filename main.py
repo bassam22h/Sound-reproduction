@@ -143,7 +143,7 @@ class VoiceCloneBot:
     
     # التحقق من الصلاحيات
     if not self.subscription.check_voice_permission(user_id, context):
-        return
+    return
         
     try:
         file = update.message.voice or update.message.audio
@@ -153,7 +153,7 @@ class VoiceCloneBot:
                 chat_id=update.effective_chat.id, 
                 text="⚠️ الرجاء إرسال مقطع صوتي فقط (بين 10-30 ثانية)."
             )
-            return
+    return
 
             # تحميل الملف الصوتي
             tg_file = context.bot.get_file(file.file_id)
