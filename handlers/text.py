@@ -9,6 +9,8 @@ from database import get_user_data, update_characters_used
 
 logger = logging.getLogger(__name__)
 
+# handlers/text.py (الجزء المعدل)
+
 def handle_text(update: Update, context: CallbackContext):
     try:
         user_id = update.effective_user.id
@@ -23,8 +25,10 @@ def handle_text(update: Update, context: CallbackContext):
             )
             return
 
-        # التحقق من وجود صوت مستنسخ
-        voice_id = context.user_data.get('voice_id')
+        # التحقق من وجود صوت مستنسخ - التعديل هنا
+        user_data = get_user_data(user_id)
+        voice_id = user_data.get('voice_id') if user_data else None
+        
         if not voice_id:
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
