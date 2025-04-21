@@ -1,7 +1,7 @@
 import os
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 from handlers import start, audio, text, error
-from subscription import check_subscription, verify_subscription
+from subscription import check_subscription, send_subscription_message  # تم تصحيح الاستيرادات هنا
 
 def main():
     # تحميل متغيرات البيئة
@@ -15,8 +15,8 @@ def main():
 
     # معالج تحقق الاشتراك عند الضغط على زر "تحقق"
     dp.add_handler(CallbackQueryHandler(
-        verify_subscription,
-        pattern="^verify_subscription$"
+        check_subscription,  # استبدال `verify_subscription` بـ `check_subscription`
+        pattern="check_subscription"
     ))
 
     # تسجيل معالجات الأوامر مع تطبيق التحقق من الاشتراك
@@ -28,13 +28,13 @@ def main():
     # معالجات الرسائل الصوتية والمقاطع الصوتية مع التحقق من الاشتراك
     dp.add_handler(MessageHandler(
         Filters.voice | Filters.audio,
-        check_subscription(audio.handle_audio)
+        check_subscription(audio.handle_audio)  # حماية الصوت بالتحقق من الاشتراك
     ))
 
     # معالجات النصوص (غير الأوامر) مع التحقق من الاشتراك
     dp.add_handler(MessageHandler(
         Filters.text & ~Filters.command,
-        check_subscription(text.handle_text)
+        check_subscription(text.handle_text)  # حماية النصوص بالتحقق من الاشتراك
     ))
 
     # معالج الأخطاء
