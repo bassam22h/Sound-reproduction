@@ -7,7 +7,7 @@ class SubscriptionManager:
         self.firebase = firebase
         self.MAX_FREE_TRIALS = int(os.getenv('DEFAULT_TRIALS', 2))
         self.MAX_FREE_CHARS = int(os.getenv('MAX_CHARS_PER_TRIAL', 100))
-        self.MAX_VOICE_CLONES = int(os.getenv('MAX_VOICE_CLONES', 1))  # 1 للمجاني
+        self.MAX_VOICE_CLONES = int(os.getenv('MAX_VOICE_CLONEOS', 1))  # 1 للمجاني
         self.REQUIRED_CHANNELS = os.getenv('REQUIRED_CHANNELS', '').split(',')
 
     def check_voice_permission(self, user_id, context=None):
