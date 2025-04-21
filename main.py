@@ -1,8 +1,7 @@
 import os
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 from handlers import start, audio, text, error
 from subscription import check_subscription
-
 def main():
     # تحميل متغيرات البيئة
     BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
