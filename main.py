@@ -20,7 +20,7 @@ def main():
     dp.add_handler(MessageHandler(
         Filters.voice | Filters.audio,
         check_subscription(audio.handle_audio)
-    )
+    ))
     
     dp.add_handler(MessageHandler(
         Filters.text & ~Filters.command,
