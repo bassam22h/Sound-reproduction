@@ -158,8 +158,7 @@ class VoiceCloneBot:
             # تحميل الملف الصوتي
             tg_file = context.bot.get_file(file.file_id)
             audio_data = self.session.get(tg_file.file_path, timeout=10).content
-
-         if response.status_code == 200:
+        if response.status_code == 200:
             voice_id = response.json().get('id')
             voice_data = {
                 'voice_id': voice_id,
