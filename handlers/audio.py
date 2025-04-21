@@ -1,13 +1,14 @@
 import os
-import json
 import logging
 from telegram import Update
 from telegram.ext import CallbackContext
 from utils.requests import session
-from database import save_voice_id  # حذفنا get_user_data
+from database import save_voice_id
+from subscription import subscription_required  # استيراد حماية الاشتراك
 
 logger = logging.getLogger(__name__)
 
+@subscription_required  # تفعيل حماية الاشتراك
 def handle_audio(update: Update, context: CallbackContext):
     try:
         user = update.effective_user
@@ -36,6 +37,10 @@ def handle_audio(update: Update, context: CallbackContext):
         else:
             update.message.reply_text("❌ حدث خطأ أثناء رفع الملف.")
         
+        # حذف الملف المؤقت بعد الاستخدام
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
     except Exception as e:
         logger.error(f"خطأ في التعامل مع الصوت: {str(e)}")
         update.message.reply_text("❌ حدث خطأ أثناء معالجة الملف الصوتي.")
