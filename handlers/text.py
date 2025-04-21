@@ -6,6 +6,7 @@ from utils.requests import session
 from utils.temp_files import create_temp_file, delete_temp_file
 from handlers.error import error_handler
 from database import get_user_data, update_characters_used
+from subscription import check_subscription
 
 logger = logging.getLogger(__name__)
 
