@@ -175,7 +175,7 @@ def stats(update, context):
 # ========== معالجة الرسائل ==========
 def handle_audio(update, context):
     user_id = update.effective_user.id
-    if not subscription.check_voice_permission(user_id, context):
+    if not subscription.check_permissions(user_id, context):
         return
 
     try:
@@ -262,7 +262,7 @@ def handle_text(update, context):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if not subscription.check_text_permission(user_id, text, context):
+    if not subscription.check_permissions(user_id, context):
         return
 
     try:
