@@ -8,7 +8,7 @@ from subscription import check_subscription  # استيراد حماية الا�
 
 logger = logging.getLogger(__name__)
 
-@subscription_required  # تفعيل حماية الاشتراك
+@check_subscription  # تفعيل حماية الاشتراك
 def handle_audio(update: Update, context: CallbackContext):
     try:
         user = update.effective_user
