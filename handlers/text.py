@@ -9,7 +9,7 @@ from database import get_user_data, update_characters_used
 from subscription import check_subscription
 
 logger = logging.getLogger(__name__)
-
+@check_subscription
 def handle_text(update: Update, context: CallbackContext):
     try:
         user_id = update.effective_user.id
