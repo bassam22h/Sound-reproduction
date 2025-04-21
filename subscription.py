@@ -5,8 +5,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# هنا تضع معرفات القنوات المطلوبة مثل ['@channel1', '@channel2']
-REQUIRED_CHANNELS = ['@YourChannel1', '@YourChannel2']
+# ضع هنا معرفات القنوات المطلوبة للاشتراك
+REQUIRED_CHANNELS = ['YourChannel1', 'YourChannel2']  # بدون @
 
 def subscription_required(func):
     @wraps(func)
@@ -16,7 +16,7 @@ def subscription_required(func):
 
         for channel in REQUIRED_CHANNELS:
             try:
-                member = context.bot.get_chat_member(chat_id=channel, user_id=user_id)
+                member = context.bot.get_chat_member(chat_id=f"@{channel}", user_id=user_id)
                 if member.status not in ["member", "administrator", "creator"]:
                     missing_channels.append(channel)
             except Exception as e:
@@ -32,14 +32,27 @@ def subscription_required(func):
     return wrapper
 
 def send_subscription_message(update: Update, context: CallbackContext, channels):
-    """يرسل رسالة تحقق من الاشتراك مع أزرار الانضمام للقنوات."""
+    """يرسل رسالة تحقق من الاشتراك مع أزرار الانضمام."""
     keyboard = []
     for channel in channels:
-        keyboard.append([InlineKeyboardButton(f"اشترك في {channel}", url=f"https://t.me/{channel.lstrip('@')}")])
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"اشترك في قناة {channel}",
+                url=f"https://t.me/{channel}"
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(
+            text="تحقّق من الاشتراك ✅",
+            callback_data="check_subscription"
+        )
+    ])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    text = "عذراً، يجب عليك الاشتراك في القنوات التالية لاستخدام البوت:"
+    text = "✅ للاستخدام، الرجاء الاشتراك في القنوات التالية، ثم اضغط 'تحقق من الاشتراك':"
+
     try:
         if update.message:
             update.message.reply_text(text, reply_markup=reply_markup)
