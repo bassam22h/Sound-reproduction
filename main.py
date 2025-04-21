@@ -302,7 +302,6 @@ def handle_text(update, context):
     user_id = update.effective_user.id
     text = update.message.text
 
-    # التحقق من جميع الحدود
     if not subscription.check_all_limits(user_id, context, len(text)):
         return
 
@@ -313,7 +312,7 @@ def handle_text(update, context):
         if not voice_id:
             context.bot.send_message(
                 chat_id=update.effective_chat.id, 
-                text="❌ *يرجى استنساخ صوتك أولاً* بإرسال مقطع صوتي (10-30 ثانية).",
+                text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).",
                 parse_mode=ParseMode.MARKDOWN
             )
             return
@@ -354,23 +353,21 @@ def handle_text(update, context):
             subscription.update_usage(user_id, len(text))
             
             # إرسال ملخص الاستخدام
-            user_data = firebase.get_user_data(user_id)
-            remaining = max(0, int(os.getenv('FREE_CHAR_LIMIT', 500)) - user_data.get('usage', {}).get('total_chars', 0)
-            context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"📊 *الأحرف المستخدمة:* {len(text)}\n*المتبقي لك:* {remaining}",
-                parse_mode=ParseMode.MARKDOWN
-            )
+            remaining_chars = int(os.getenv('FREE_CHAR_LIMIT', 500)) - user_data.get('usage', {}).get('total_chars', 0)
+        remaining = max(0, remaining_chars)
+        
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"📊 الأحرف المستخدمة: {len(text)}\nالمتبقي لك: {remaining}",
+            parse_mode=ParseMode.MARKDOWN
+        )
 
-            os.unlink(temp_audio_path)
-
-        else:
-            error_msg = response.json().get('message', response.text)
-            context.bot.send_message(
-                chat_id=update.effective_chat.id, 
-                text=f"❌ *خطأ في تحويل النص:* {error_msg}",
-                parse_mode=ParseMode.MARKDOWN
-            )
+    except Exception as e:
+        logger.error(f"Error in handle_text: {str(e)}", exc_info=True)
+        context.bot.send_message(
+            chat_id=update.effective_chat.id, 
+            text="❌ حدث خطأ أثناء المعالجة"
+        )
 
     except Exception as e:
         logger.error(f"Error in handle_text: {str(e)}", exc_info=True)
