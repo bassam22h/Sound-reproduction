@@ -1,7 +1,6 @@
 import os
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from handlers import start, audio, text, error
-from subscription import check_subscription
 
 def main():
     BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -9,20 +8,11 @@ def main():
     updater = Updater(token=BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
-    # تسجيل ال handlers
     dp.add_handler(CommandHandler("start", start.start))
-    dp.add_handler(MessageHandler(
-        Filters.voice | Filters.audio,
-        check_subscription(audio.handle_audio)
-    ))
-    dp.add_handler(MessageHandler(
-        Filters.text & ~Filters.command,
-        check_subscription(text.handle_text)
-    ))
-    
+    dp.add_handler(MessageHandler(Filters.voice | Filters.audio, audio.handle_audio))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, text.handle_text))
     dp.add_error_handler(error.error_handler)
 
-    # تشغيل ويب هوك
     PORT = int(os.getenv('PORT', 10000))
     WEBHOOK_URL = os.getenv('WEBHOOK_URL')
     
@@ -34,8 +24,6 @@ def main():
         drop_pending_updates=True
     )
     print(f"✅ البوت يعمل الآن على البورت {PORT}")
-    print(f"✅ عنوان الويب هوك: {WEBHOOK_URL}/{BOT_TOKEN}")
-    
     updater.idle()
 
 if __name__ == '__main__':
