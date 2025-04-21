@@ -235,12 +235,12 @@ class VoiceCloneBot:
                     parse_mode=ParseMode.MARKDOWN
                 )
 
-        except json.JSONDecodeError as e:
-    logger.error(f"Failed to decode JSON response: {str(e)}")
-    context.bot.send_message(
-        chat_id=update.effective_chat.id, 
-        text="❌ حدث خطأ في معالجة الرد من الخادم"
-    )
+        except:
+            logger.error(f"Failed to decode JSON response: {str(e)}")
+            context.bot.send_message(
+                chat_id=update.effective_chat.id, 
+                text="❌ حدث خطأ في معالجة الرد من الخادم"
+            )
         except Exception as e:
             logger.error(f"Error in handle_audio: {str(e)}")
             context.bot.send_message(
