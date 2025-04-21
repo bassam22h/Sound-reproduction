@@ -142,7 +142,7 @@ class VoiceCloneBot:
         user_id = update.effective_user.id
     
     # التحقق من الصلاحيات
-    if not self.subscription.check_voice_permission(user_id, context):
+        if not self.subscription.check_voice_permission(user_id, context):
     return
         
     try:
