@@ -29,3 +29,19 @@ class AdminPanel:
             'premium_expiry': firebase.database.ServerValue.TIMESTAMP + months*30*24*60*60
         })
         return True
+
+    def activate_premium(self, user_id, duration_days=None):
+        """وظيفة جديدة للمشرفين لتفعيل الاشتراك"""
+        if not self.is_admin(user_id):
+            return False
+            
+        return self.premium.activate_premium(user_id, duration_days)
+        
+    def get_premium_users(self):
+        """الحصول على قائمة المستخدمين المميزين"""
+        users_ref = self.firebase.ref.child('users')
+        return {
+            uid: data['premium']
+            for uid, data in (users_ref.get() or {}).items()
+            if data.get('premium', {}).get('is_premium', False)
+        }
