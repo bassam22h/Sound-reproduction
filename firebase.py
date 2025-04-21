@@ -1,8 +1,6 @@
 import os
-import json
 import firebase_admin
 from firebase_admin import credentials, db
-from urllib.parse import urlparse
 
 class FirebaseManager:
     def __init__(self):
@@ -12,6 +10,24 @@ class FirebaseManager:
                 'databaseURL': os.getenv('FIREBASE_DATABASE_URL')
             })
         self.ref = db.reference('/')
+        
+    def update_voice_clone(self, user_id, voice_data):
+        """تحديث أو تغيير الصوت المستنسخ مع حذف القديم"""
+        user_ref = self.ref.child('users').child(str(user_id))
+        
+        # حذف الصوت القديم إذا موجود
+        user_ref.child('voice').delete()
+        
+        # إضافة الصوت الجديد
+        user_ref.child('voice').set(voice_data)
+        
+        # تحديث حالة الاستنساخ
+        user_ref.update({
+            'voice_cloned': True,
+            'last_voice_update': {'.sv': 'timestamp'}
+        })
+        
+        return True
         
     def _get_firebase_credentials(self):
         return credentials.Certificate({
