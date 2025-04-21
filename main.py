@@ -2,9 +2,9 @@ import tempfile
 import os
 import logging
 import json
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from telegram import Bot, Update, ParseMode
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Dispatcher
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -19,48 +19,57 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# إنشاء تطبيق Flask في المستوى الأعلى
+app = Flask(__name__)
+
+# متغيرات عالمية
+bot = None
+dp = None
+session = None
+firebase = None
+subscription = None
+admin = None
+API_KEY = None
+
 class VoiceCloneBot:
     def __init__(self):
-        self.app = Flask(__name__)
+        global bot, dp, session, firebase, subscription, admin, API_KEY
+        
         self.setup_requests_session()
-        self.firebase = FirebaseManager()
-        self.subscription = SubscriptionManager(self.firebase)
-        self.admin = AdminPanel(self.firebase)
+        firebase = FirebaseManager()
+        subscription = SubscriptionManager(firebase)
+        admin = AdminPanel(firebase)
         
         self.BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-        self.API_KEY = os.getenv('SPEECHIFY_API_KEY')
-        self.WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # إضافة متغير ويب هوك URL
-        self.bot = Bot(token=self.BOT_TOKEN)
+        API_KEY = os.getenv('SPEECHIFY_API_KEY')
+        self.WEBHOOK_URL = os.getenv('WEBHOOK_URL')
         
-        self.updater = Updater(token=self.BOT_TOKEN, use_context=True)
-        self.dp = self.updater.dispatcher
+        bot = Bot(token=self.BOT_TOKEN)
+        self.updater = Updater(bot=bot, use_context=True)
+        dp = self.updater.dispatcher
+        
         self.register_handlers()
-        
-        # إعداد مسارات الويب هوك
-        self.app.route(f'/{self.BOT_TOKEN}', methods=['POST'])(self.webhook)
-        self.app.route('/')(self.index)
-        
-        # تعيين الويب هوك تلقائياً
         self.set_webhook()
 
     def set_webhook(self):
         try:
-        # حذف أي ويب هوك موجود مسبقاً
-            self.bot.delete_webhook()
-        
-        # تعيين الويب هوك الجديد
+            # حذف أي ويب هوك موجود مسبقاً
+            bot.delete_webhook()
+            
+            # تعيين الويب هوك الجديد
             webhook_url = f"{self.WEBHOOK_URL}/{self.BOT_TOKEN}"
-            result = self.bot.set_webhook(url=webhook_url)
-        
+            result = bot.set_webhook(url=webhook_url)
+            
             if result:
-                logger.info(f"تم تعيين الويب هوك بنجاح: {webhook_url}")
+                logger.info(f"✅ تم تعيين الويب هوك بنجاح: {webhook_url}")
             else:
-                logger.error("فشل في تعيين الويب هوك")
+                logger.error("❌ فشل في تعيين الويب هوك")
         except Exception as e:
-            logger.error(f"خطأ في تعيين الويب هوك: {str(e)}")
+            logger.error(f"🚨 خطأ في تعيين الويب هوك: {str(e)}")
 
     def setup_requests_session(self):
-        self.session = requests.Session()
+        global session
+        session = requests.Session()
         retry_strategy = Retry(
             total=3,
             backoff_factor=1,
@@ -71,14 +80,14 @@ class VoiceCloneBot:
             pool_connections=10,
             pool_maxsize=10
         )
-        self.session.mount("https://", adapter)
+        session.mount("https://", adapter)
     
     def register_handlers(self):
-        self.dp.add_handler(CommandHandler("start", self.start))
-        self.dp.add_handler(CommandHandler("help", self.help))
-        self.dp.add_handler(CommandHandler("stats", self.stats))
-        self.dp.add_handler(MessageHandler(Filters.voice | Filters.audio, self.handle_audio))
-        self.dp.add_handler(MessageHandler(Filters.text & ~Filters.command, self.handle_text))
+        dp.add_handler(CommandHandler("start", self.start))
+        dp.add_handler(CommandHandler("help", self.help))
+        dp.add_handler(CommandHandler("stats", self.stats))
+        dp.add_handler(MessageHandler(Filters.voice | Filters.audio, self.handle_audio))
+        dp.add_handler(MessageHandler(Filters.text & ~Filters.command, self.handle_text))
         
     def start(self, update, context):
         user_id = update.effective_user.id
@@ -347,32 +356,32 @@ class VoiceCloneBot:
                 text="❌ حدث خطأ غير متوقع أثناء معالجة النص"
             )
     
-def webhook(self):
+@app.route(f'/{os.getenv("TELEGRAM_BOT_TOKEN")}', methods=['POST'])
+def webhook():
     try:
-        update = Update.de_json(request.get_json(force=True), self.bot)
-        self.dp.process_update(update)
+        update = Update.de_json(request.get_json(force=True), bot)
+        dp.process_update(update)
         return jsonify({'status': 'ok'}), 200
     except Exception as e:
         logger.error(f"Webhook error: {str(e)}")
         return jsonify({'status': 'error'}), 500
-        
-def index(self):
+
+@app.route('/')
+def index():
     return 'Bot is running!'
-    
-def run(self):
-    port = int(os.environ.get('PORT', 10000))
-    self.app.run(
-        host='0.0.0.0',
-        port=port,
-        debug=False  # تأكد أن debug=False في البيئة الإنتاجية
-    )
+
+def create_app():
+    # إنشاء كائن البوت الذي سيقوم بتهيئة كل شيء
+    VoiceCloneBot()
+    return app
+
 if __name__ == '__main__':
-    # إنشاء كائن البوت
-    bot = VoiceCloneBot()
+    # إنشاء التطبيق
+    app = create_app()
     
     # تشغيل الخادم
     port = int(os.environ.get('PORT', 10000))
-    bot.app.run(
+    app.run(
         host='0.0.0.0',
         port=port,
         debug=False,
