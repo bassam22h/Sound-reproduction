@@ -10,7 +10,7 @@ def error_handler(update: Update, context: CallbackContext):
         logger.error(msg="حدث خطأ في المعالج", exc_info=context.error)
         
         if update and update.effective_chat:
-            await context.bot.send_message(
+            context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=ERROR_MESSAGE,
                 parse_mode='Markdown'
