@@ -1,47 +1,65 @@
 import os
-from telegram import ParseMode
+import logging
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
+
+logger = logging.getLogger(__name__)
 
 class AdminPanel:
-    def __init__(self, firebase):
+    def __init__(self, firebase, premium_manager):
         self.firebase = firebase
-        self.ADMIN_IDS = [int(id) for id in os.getenv('ADMIN_USER_ID', '').split(',')]
-        
+        self.premium = premium_manager
+        self.ADMIN_IDS = [int(id) for id in os.getenv('ADMIN_IDS', '').split(',') if id.strip()]
+        logger.info(f"المشرفون المعتمدون: {self.ADMIN_IDS}")
+
     def is_admin(self, user_id):
         return user_id in self.ADMIN_IDS
-        
-    def get_stats(self):
-        users_ref = self.firebase.ref.child('users')
-        return {
-            'total_users': len(users_ref.get() or {}),
-            'total_requests': sum(
-                user.get('usage', {}).get('requests', 0)
-                for user in (users_ref.get() or {}).values()
-            )
-        }
-        
-    def activate_premium(self, user_id, months=1):
-        if not self.is_admin(user_id):
-            return False
-            
-        user_ref = self.firebase.ref.child('users').child(str(user_id))
-        user_ref.update({
-            'premium': True,
-            'premium_expiry': firebase.database.ServerValue.TIMESTAMP + months*30*24*60*60
-        })
-        return True
 
-    def activate_premium(self, user_id, duration_days=None):
-        """وظيفة جديدة للمشرفين لتفعيل الاشتراك"""
-        if not self.is_admin(user_id):
-            return False
-            
-        return self.premium.activate_premium(user_id, duration_days)
-        
-    def get_premium_users(self):
-        """الحصول على قائمة المستخدمين المميزين"""
-        users_ref = self.firebase.ref.child('users')
-        return {
-            uid: data['premium']
-            for uid, data in (users_ref.get() or {}).items()
-            if data.get('premium', {}).get('is_premium', False)
+    def get_dashboard(self):
+        """لوحة تحكم المشرفين"""
+        buttons = [
+            [InlineKeyboardButton("📊 الإحصائيات", callback_data="admin_stats")],
+            [InlineKeyboardButton("👑 تفعيل اشتراك", callback_data="admin_activate")],
+            [InlineKeyboardButton("📢 إشعار عام", callback_data="admin_broadcast")],
+            [InlineKeyboardButton("🔍 بحث عن مستخدم", callback_data="admin_search")]
+        ]
+        return InlineKeyboardMarkup(buttons)
+
+    def get_stats(self):
+        """إحصائيات البوت"""
+        users = self.firebase.ref.child('users').get() or {}
+        stats = {
+            'total': len(users),
+            'premium': sum(1 for u in users.values() if u.get('premium', {}).get('is_premium')),
+            'active': sum(u.get('usage', {}).get('requests', 0) for u in users.values())
         }
+        return (
+            f"📈 *إحصائيات البوت*\n\n"
+            f"👥 المستخدمون: {stats['total']}\n"
+            f"💎 المميزون: {stats['premium']}\n"
+            f"📨 الطلبات: {stats['active']}"
+        )
+
+    def prepare_broadcast(self, update, context):
+        """تهيئة إرسال إشعار عام"""
+        context.user_data['action'] = 'broadcast'
+        update.message.reply_text(
+            "📢 أرسل الرسالة للإشعار العام:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("إلغاء", callback_data="admin_cancel")]
+            ])
+        )
+
+    def send_broadcast(self, text):
+        """تنفيذ البث للمستخدمين"""
+        users = self.firebase.ref.child('users').get() or {}
+        results = {'success': 0, 'failed': []}
+        
+        for user_id in users:
+            try:
+                self.firebase.send_message(user_id, text)
+                results['success'] += 1
+            except Exception as e:
+                results['failed'].append(str(user_id))
+                logger.error(f"فشل الإرسال لـ {user_id}: {str(e)}")
+        
+        return results
