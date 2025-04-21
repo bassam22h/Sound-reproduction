@@ -17,7 +17,7 @@ def handle_text(update: Update, context: CallbackContext):
 
         # التحقق من طول النص
         if not text or len(text) > max_chars:
-            await context.bot.send_message(
+            context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=f"الرجاء إرسال نص صالح (بحد أقصى {max_chars} حرف)."
             )
@@ -26,7 +26,7 @@ def handle_text(update: Update, context: CallbackContext):
         # التحقق من وجود صوت مستنسخ
         voice_id = context.user_data.get('voice_id')
         if not voice_id:
-            await context.bot.send_message(
+            context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية)."
             )
@@ -40,7 +40,7 @@ def handle_text(update: Update, context: CallbackContext):
             "model": "simba-multilingual"
         }
 
-        response = await session.post(
+        response = session.post(
             'https://api.sws.speechify.com/v1/audio/stream',
             headers={
                 'Authorization': f'Bearer {os.getenv("SPEECHIFY_API_KEY")}',
@@ -51,22 +51,23 @@ def handle_text(update: Update, context: CallbackContext):
         )
 
         if response.status_code == 200:
-            temp_file = await create_temp_file(response.content, suffix='.mp3')
-            await context.bot.send_voice(
-                chat_id=update.effective_chat.id,
-                voice=open(temp_file, 'rb')
-            )
-            await delete_temp_file(temp_file)
+            temp_file = create_temp_file(response.content, suffix='.mp3')
+            with open(temp_file, 'rb') as audio_file:
+                context.bot.send_voice(
+                    chat_id=update.effective_chat.id,
+                    voice=audio_file
+                )
+            delete_temp_file(temp_file)
             
             # تحديث عدد الأحرف المستخدمة
             update_characters_used(user_id, len(text))
         else:
             error_msg = response.json().get('message', response.text)
-            await context.bot.send_message(
+            context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=f"❌ خطأ في تحويل النص: {error_msg}"
             )
 
     except Exception as e:
         logger.error(f"Error in handle_text: {str(e)}")
-        await error_handler(update, context, e)
+        error_handler(update, context, e)
