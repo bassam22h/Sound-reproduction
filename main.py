@@ -235,7 +235,7 @@ class VoiceCloneBot:
                     parse_mode=ParseMode.MARKDOWN
                 )
 
-        except:
+        except Exception as e:  # تم استبدال except: بـ Exception as e
             logger.error(f"Failed to decode JSON response: {str(e)}")
             context.bot.send_message(
                 chat_id=update.effective_chat.id, 
@@ -347,17 +347,25 @@ class VoiceCloneBot:
                 text="❌ حدث خطأ غير متوقع أثناء معالجة النص"
             )
     
-    def webhook(self):
+def webhook(self):
+    try:
         update = Update.de_json(request.get_json(force=True), self.bot)
         self.dp.process_update(update)
-        return 'ok'
+        return jsonify({'status': 'ok'}), 200
+    except Exception as e:
+        logger.error(f"Webhook error: {str(e)}")
+        return jsonify({'status': 'error'}), 500
         
-    def index(self):
-        return 'Bot is running!'
-        
-    def run(self):
-        port = int(os.environ.get('PORT', 10000))
-        self.app.run(host='0.0.0.0', port=port)
+def index(self):
+    return 'Bot is running!'
+    
+def run(self):
+    port = int(os.environ.get('PORT', 10000))
+    self.app.run(
+        host='0.0.0.0',
+        port=port,
+        debug=False  # تأكد أن debug=False في البيئة الإنتاجية
+    )
 
 if __name__ == '__main__':
     bot = VoiceCloneBot()
