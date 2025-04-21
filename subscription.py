@@ -1,55 +1,50 @@
 import os
-from functools import wraps
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.error import BadRequest
-from templates import messages
+from telegram import ParseMode
 
-REQUIRED_CHANNELS = os.getenv("REQUIRED_CHANNELS", "").split(",")
-
-def is_user_subscribed(bot, user_id):
-    for channel in REQUIRED_CHANNELS:
-        try:
-            member = bot.get_chat_member(chat_id=channel.strip(), user_id=user_id)
-            if member.status in ['left', 'kicked']:
-                return False
-        except Exception as e:
-            print(f"Error checking membership for {channel}: {e}")
+class SubscriptionManager:
+    def __init__(self, firebase):
+        self.firebase = firebase
+        self.MAX_FREE_TRIALS = int(os.getenv('DEFAULT_TRIALS', 2))
+        self.MAX_FREE_CHARS = int(os.getenv('MAX_CHARS_PER_TRIAL', 100))
+        self.REQUIRED_CHANNELS = os.getenv('REQUIRED_CHANNELS', '').split(',')
+        
+    def check_required_channels(self, user_id, context=None):
+        if not self.REQUIRED_CHANNELS:
+            return True
+            
+        # كود التحقق من الاشتراك في القنوات المطلوبة
+        # ...
+        
+    def check_audio_permission(self, user_id, context=None):
+        user_data = self.firebase.get_user_data(user_id)
+        if user_data and user_data.get('voice_cloned'):
+            if context:
+                context.bot.send_message(
+                    chat_id=user_id,
+                    text="⚠️ لقد قمت بالفعل باستنساخ صوتك سابقاً",
+                    parse_mode=ParseMode.MARKDOWN)
             return False
-    return True
-
-def check_subscription(func):
-    @wraps(func)
-    def wrapper(update, context):
-        user = update.effective_user
-        if not is_user_subscribed(context.bot, user.id):
-            send_subscription_message(update, context)
-            return
-        return func(update, context)
-    return wrapper
-
-def send_subscription_message(update, context):
-    keyboard = []
-    for channel in REQUIRED_CHANNELS:
-        btn = InlineKeyboardButton(f"اشترك في {channel.strip()}", url=f"https://t.me/{channel.strip().lstrip('@')}")
-        keyboard.append([btn])
-    keyboard.append([InlineKeyboardButton("✅ تأكيد الاشتراك", callback_data="verify_subscription")])
-
-    channels_list = "\n".join([f"• @{channel.strip().lstrip('@')}" for channel in REQUIRED_CHANNELS])
-
-    try:
-        update.message.reply_text(
-            messages.SUBSCRIPTION_REQUIRED.format(channels_list=channels_list),
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        print(f"Error sending subscription message: {e}")
-
-def verify_subscription(update, context):
-    query = update.callback_query
-    user = query.from_user
-    if is_user_subscribed(context.bot, user.id):
-        query.answer("تم التحقق ✅ يمكنك استخدام البوت الآن")
-        query.message.delete()
-    else:
-        query.answer("❌ لم يتم العثور على اشتراكك، يرجى الاشتراك أولاً", show_alert=True)
+        return True
+        
+    def check_text_permission(self, user_id, text, context=None):
+        user_data = self.firebase.get_user_data(user_id) or {}
+        usage = user_data.get('usage', {})
+        
+        if len(text) > self.MAX_FREE_CHARS:
+            if context:
+                context.bot.send_message(
+                    chat_id=user_id,
+                    text=f"⚠️ تجاوزت الحد المسموح ({self.MAX_FREE_CHARS} حرف)",
+                    parse_mode=ParseMode.MARKDOWN)
+            return False
+            
+        if (usage.get('requests', 0) >= self.MAX_FREE_TRIALS and 
+            not user_data.get('premium', False)):
+            if context:
+                context.bot.send_message(
+                    chat_id=user_id,
+                    text="⚠️ لقد استنفذت محاولاتك المجانية",
+                    parse_mode=ParseMode.MARKDOWN)
+            return False
+            
+        return True
