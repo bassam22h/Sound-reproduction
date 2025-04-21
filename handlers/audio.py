@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import CallbackContext
 from utils.requests import session
 from database import save_voice_id
-from subscription import subscription_required  # استيراد حماية الاشتراك
+from subscription import check_subscription  # استيراد حماية الاشتراك
 
 logger = logging.getLogger(__name__)
 
