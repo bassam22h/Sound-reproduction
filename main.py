@@ -13,9 +13,9 @@ def main():
     dp = updater.dispatcher
 
     dp.add_handler(CallbackQueryHandler(
-        verify_subscription,
-        pattern="^verify_subscription$"
-    ))
+    check_subscription,
+    pattern="^verify_subscription$"
+))
     # تسجيل المعالجات مع تطبيق نظام التحقق
     dp.add_handler(CommandHandler("start", start.start))
     
