@@ -9,7 +9,7 @@ from handlers.error import error_handler
 
 logger = logging.getLogger(__name__)
 
-async def handle_audio(update: Update, context: CallbackContext):
+def handle_audio(update: Update, context: CallbackContext):
     try:
         user_id = update.effective_user.id
         file = update.message.voice or update.message.audio
