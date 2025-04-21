@@ -1,7 +1,6 @@
 from telegram import Update
 from telegram.ext import CallbackContext
-from templates.messages import WELCOME_MESSAGE
-import os
+import os  # حذفنا WELCOME_MESSAGE
 
 def start(update: Update, context: CallbackContext):
     user = update.effective_user
@@ -9,7 +8,6 @@ def start(update: Update, context: CallbackContext):
     max_chars = os.getenv('MAX_CHARS_PER_TRIAL', 100)
     channels = os.getenv('REQUIRED_CHANNELS', '').split(',')
     
-    # تحضير رسالة الترحيب بدون تنسيق Markdown المعقد
     welcome_msg = f"""
 مرحباً {user.first_name}! 👋
 
