@@ -29,6 +29,7 @@ class VoiceCloneBot:
         
         self.BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
         self.API_KEY = os.getenv('SPEECHIFY_API_KEY')
+        self.WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # إضافة متغير ويب هوك URL
         self.bot = Bot(token=self.BOT_TOKEN)
         
         self.updater = Updater(token=self.BOT_TOKEN, use_context=True)
@@ -39,6 +40,25 @@ class VoiceCloneBot:
         self.app.route(f'/{self.BOT_TOKEN}', methods=['POST'])(self.webhook)
         self.app.route('/')(self.index)
         
+        # تعيين الويب هوك تلقائياً
+        self.set_webhook()
+
+    def set_webhook(self):
+    try:
+        # حذف أي ويب هوك موجود مسبقاً
+        self.bot.delete_webhook()
+        
+        # تعيين الويب هوك الجديد
+        webhook_url = f"{self.WEBHOOK_URL}/{self.BOT_TOKEN}"
+        result = self.bot.set_webhook(url=webhook_url)
+        
+        if result:
+            logger.info(f"تم تعيين الويب هوك بنجاح: {webhook_url}")
+        else:
+            logger.error("فشل في تعيين الويب هوك")
+    except Exception as e:
+        logger.error(f"خطأ في تعيين الويب هوك: {str(e)}")
+
     def setup_requests_session(self):
         self.session = requests.Session()
         retry_strategy = Retry(
@@ -346,7 +366,15 @@ def run(self):
         port=port,
         debug=False  # تأكد أن debug=False في البيئة الإنتاجية
     )
-app = Flask(__name__)
 if __name__ == '__main__':
+    # إنشاء كائن البوت
+    bot = VoiceCloneBot()
+    
+    # تشغيل الخادم
     port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
+    bot.app.run(
+        host='0.0.0.0',
+        port=port,
+        debug=False,
+        use_reloader=False
+    )
