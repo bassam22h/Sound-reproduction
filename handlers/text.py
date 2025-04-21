@@ -9,8 +9,6 @@ from database import get_user_data, update_characters_used
 
 logger = logging.getLogger(__name__)
 
-# handlers/text.py (الجزء المعدل)
-
 def handle_text(update: Update, context: CallbackContext):
     try:
         user_id = update.effective_user.id
@@ -25,10 +23,9 @@ def handle_text(update: Update, context: CallbackContext):
             )
             return
 
-        # التحقق من وجود صوت مستنسخ - التعديل هنا
+        # التحقق من وجود صوت مستنسخ
         user_data = get_user_data(user_id)
         voice_id = user_data.get('voice_id') if user_data else None
-        
         if not voice_id:
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
@@ -36,7 +33,7 @@ def handle_text(update: Update, context: CallbackContext):
             )
             return
 
-        # معالجة النص وتحويله إلى صوت...
+        # معالجة النص وتحويله إلى صوت
         payload = {
             "input": text,
             "voice_id": voice_id,
@@ -56,12 +53,14 @@ def handle_text(update: Update, context: CallbackContext):
 
         if response.status_code == 200:
             temp_file = create_temp_file(response.content, suffix='.mp3')
-            with open(temp_file, 'rb') as audio_file:
-                context.bot.send_voice(
-                    chat_id=update.effective_chat.id,
-                    voice=audio_file
-                )
-            delete_temp_file(temp_file)
+            try:
+                with open(temp_file, 'rb') as audio_file:
+                    context.bot.send_voice(
+                        chat_id=update.effective_chat.id,
+                        voice=audio_file
+                    )
+            finally:
+                delete_temp_file(temp_file)
             
             # تحديث عدد الأحرف المستخدمة
             update_characters_used(user_id, len(text))
