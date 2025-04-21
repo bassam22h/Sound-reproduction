@@ -1,7 +1,7 @@
 import os
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 from handlers import start, audio, text, error
-from subscription import subscription_required
+from subscription import subscription_required, verify_subscription
 
 def main():
     BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -14,6 +14,11 @@ def main():
     dp.add_handler(CommandHandler(
         "start",
         start.start
+    ))
+
+    dp.add_handler(CallbackQueryHandler(
+        verify_subscription,
+        pattern="^verify_subscription$"
     ))
 
     dp.add_handler(MessageHandler(
