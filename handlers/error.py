@@ -5,7 +5,7 @@ from templates.messages import ERROR_MESSAGE
 
 logger = logging.getLogger(__name__)
 
-async def error_handler(update: Update, context: CallbackContext):
+def error_handler(update: Update, context: CallbackContext):
     try:
         logger.error(msg="حدث خطأ في المعالج", exc_info=context.error)
         
