@@ -139,7 +139,7 @@ class VoiceCloneBot:
         )
         
     def handle_audio(self, update, context):
-    user_id = update.effective_user.id
+        user_id = update.effective_user.id
     
     # التحقق من الصلاحيات
     if not self.subscription.check_voice_permission(user_id, context):
