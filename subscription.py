@@ -47,16 +47,11 @@ def is_subscribed(context, user_id):
 
 # رسالة الاشتراك
 def send_subscription_message(update, context, missing_channels):
-    message = "📢 للاستمرار، يرجى الاشتراك في القنوات التالية:\n\n" + \
-              "\n".join([f"🔹 @{channel}" for channel in missing_channels]) + \
-              "\n\nبعد الاشتراك، اضغط على زر التحقق في الأسفل"
-    
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=message,
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=get_channels_keyboard()
-    )
+    message = "يرجى الاشتراك في القنوات التالية:\n"
+    for channel in missing_channels:
+        message += f"@{channel}\n"
+
+    context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode=None)
 
 # رسالة انتهاء المحاولات
 def send_trial_expired_message(update, context):
