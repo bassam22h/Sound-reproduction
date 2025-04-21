@@ -6,12 +6,11 @@ from subscription import check_subscription
 def main():
     BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
     
-    # إعداد Updater بسيط
     updater = Updater(token=BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
     # تسجيل ال handlers
-    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("start", start.start))
     dp.add_handler(MessageHandler(
         Filters.voice | Filters.audio,
         check_subscription(audio.handle_audio)
