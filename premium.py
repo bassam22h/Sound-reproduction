@@ -164,8 +164,8 @@ class PremiumManager:
                     fr"\\- {self.CHARS_MONTHLY:,} حرف شهرياً\\n"
                     r"\\- استنساخ صوت غير محدود\\n"
                     r"\\- أولوية في المعالجة\\n\\n"
-                    fr"💵 \*السعر:\* {self.PRICE.replace('-', r'\-')}\\n"
-                    fr"للاشتراك: {self.PAYMENT_CHANNEL.replace('-', r'\-')}"
+                    f"💵 \*السعر:\* {self.PRICE.replace('-', r'\-')}\\n"
+                    f"للاشتراك: {self.PAYMENT_CHANNEL.replace('-', r'\-')}"
                 )
                 return text
         except Exception as e:
