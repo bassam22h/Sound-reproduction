@@ -166,6 +166,14 @@ class AdminPanel:
         except ValueError:
             update.message.reply_text("⚠️ يجب إدخال معرف مستخدم صحيح")
 
+    def _format_last_active(self, user_data):
+        last_used = user_data.get('last_used')
+        if isinstance(last_used, dict):  # Firebase timestamp
+            return "اليوم"
+        elif last_used:
+            return datetime.fromtimestamp(last_used).strftime('%Y-%m-%d %H:%M')
+        return "غير معروف"
+
     def _process_broadcast(self, update, message):
         users = self.firebase.ref.child('users').get() or {}
         success = failed = 0
