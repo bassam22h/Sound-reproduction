@@ -95,6 +95,9 @@ def register_handlers():
         lambda u,c: handle_admin_actions(u,c, admin, premium),
         pattern="^admin_"
     ))
+    
+    # معالج الأخطاء
+    dp.add_error_handler(error_handler)
 
 def set_webhook(bot_token, webhook_url):
     try:
@@ -108,13 +111,20 @@ def set_webhook(bot_token, webhook_url):
     except Exception as e:
         logger.error(f"🚨 خطأ في تعيين الويب هوك: {str(e)}")
 
+def error_handler(update, context):
+    logger.error(f"حدث خطأ: {context.error}", exc_info=True)
+    if update and update.effective_chat:
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❌ حدث خطأ غير متوقع. يرجى المحاولة لاحقًا."
+        )
+
 # ========== دوال معالجة الأوامر ==========
 def start(update, context):
     user_id = update.effective_user.id
     if not subscription.check_required_channels(user_id, context):
         return
         
-    # تجاهل التحقق من استنساخ الصوت لأمر /start
     if not subscription.check_voice_clone_limit(user_id, context, ignore_limit=True):
         return
         
@@ -129,16 +139,18 @@ def start(update, context):
     )
     
     # تسجيل المستخدم الجديد في Firebase
-    user_data = {
-        'first_join': {'.sv': 'timestamp'},
-        'username': update.effective_user.username,
-        'full_name': update.effective_user.full_name,
-        'usage': {
-            'total_chars': 0,
-            'voice_cloned': False
+    user_data = firebase.get_user_data(user_id) or {}
+    if not user_data:  # فقط للمستخدمين الجدد
+        new_user_data = {
+            'first_join': {'.sv': 'timestamp'},
+            'username': update.effective_user.username,
+            'full_name': update.effective_user.full_name,
+            'usage': {
+                'total_chars': 0,
+                'voice_cloned': False
+            }
         }
-    }
-    firebase.save_user_data(user_id, user_data)
+        firebase.save_user_data(user_id, new_user_data)
 
 def help(update, context):
     help_msg = """
@@ -201,13 +213,11 @@ def handle_admin_actions(update, context, admin, premium):
     query = update.callback_query
     admin.handle_admin_actions(update, context)
 
-def handle_messages(update, context, admin):
-    if admin.is_admin(update.effective_user.id) and 'awaiting_' in context.user_data:
-        admin.process_admin_input(update, context)
 # ========== معالجة الرسائل ==========
 def handle_audio(update, context):
     user_id = update.effective_user.id
-    if not subscription.check_all_limits(user_id, context):
+    if not (subscription.check_required_channels(user_id, context) and 
+            subscription.check_voice_clone_limit(user_id, context)):
         return
 
     try:
@@ -254,11 +264,7 @@ def handle_audio(update, context):
             }
             
             # تحديث حالة المستخدم
-            firebase.ref.child('users').child(str(user_id)).update({
-                'voice': voice_data,
-                'voice_cloned': True,
-                'last_voice_clone': {'.sv': 'timestamp'}
-            })
+            firebase.update_voice_clone(user_id, voice_data)
             
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
@@ -284,7 +290,9 @@ def handle_text(update, context):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if not subscription.check_all_limits(user_id, context, len(text)):
+    if not (subscription.check_required_channels(user_id, context) and 
+            subscription.check_char_limit(user_id, context, len(text)) and
+            subscription.check_voice_clone_limit(user_id, context)):
         return
 
     try:
@@ -331,30 +339,25 @@ def handle_text(update, context):
             with open(temp_audio_path, 'rb') as audio_file:
                 context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio_file)
 
+            # حذف الملف المؤقت
+            os.unlink(temp_audio_path)
+
             # تحديث الاستخدام
-            subscription.update_usage(user_id, len(text))
+            firebase.update_usage(user_id, len(text))
             
             # إرسال ملخص الاستخدام
-            remaining = max(0, int(os.getenv('FREE_CHAR_LIMIT', 500)) - user_data.get('usage', {}).get('total_chars', 0))
-        
-        context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"📊 الأحرف المستخدمة: {len(text)}\nالمتبقي لك: {remaining}",
-            parse_mode=ParseMode.MARKDOWN
-        )
+            remaining = max(0, int(os.getenv('FREE_CHAR_LIMIT', 500)) - (user_data.get('usage', {}).get('total_chars', 0) + len(text))
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"📊 الأحرف المستخدمة: {len(text)}\nالمتبقي لك: {remaining}",
+                parse_mode=ParseMode.MARKDOWN
+            )
 
     except Exception as e:
         logger.error(f"Error in handle_text: {str(e)}", exc_info=True)
         context.bot.send_message(
             chat_id=update.effective_chat.id, 
             text="❌ حدث خطأ أثناء المعالجة"
-        )
-
-    except Exception as e:
-        logger.error(f"Error in handle_text: {str(e)}", exc_info=True)
-        context.bot.send_message(
-            chat_id=update.effective_chat.id, 
-            text="❌ حدث خطأ غير متوقع أثناء معالجة النص"
         )
 
 # ========== مسارات الويب ==========
