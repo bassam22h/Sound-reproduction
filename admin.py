@@ -12,7 +12,7 @@ class AdminPanel:
         self.premium = premium_manager
         self.ADMIN_IDS = self._load_admin_ids()
         self._validate_admins()
-        logger.info(f"✅ تم تهيئة لوحة المشرفين | عدد المشرفين: {len(self.ADMIN_IDS)}")
+        logger.info(f"✅ تم تهيئة لوحة المشرفين \| عدد المشرفين: {len(self\.ADMIN_IDS)}")
 
     def _load_admin_ids(self):
         """تحميل معرّفات المشرفين مع التصفية والتحقق"""
@@ -28,7 +28,7 @@ class AdminPanel:
     def _validate_admins(self):
         """التحقق من وجود مشرفين مع تسجيل تحذير واضح"""
         if not self.ADMIN_IDS:
-            logger.warning("⚠️ لم يتم تعيين أي مشرفين! البوت لن يعمل بشكل صحيح بدون مشرفين")
+            logger.warning("⚠️ لم يتم تعيين أي مشرفين\! البوت لن يعمل بشكل صحيح بدون مشرفين")
 
     def is_admin(self, user_id):
         """التحقق من الصلاحية مع تسجيل مفصل"""
@@ -105,7 +105,7 @@ class AdminPanel:
         query.answer()  # إعلام المستخدم بأن الإجراء تم استلامه
         
         if not self.is_admin(query.from_user.id):
-            query.edit_message_text("⛔ ليس لديك صلاحية الوصول إلى هذه اللوحة")
+            query.edit_message_text("⛔ ليس لديك صلاحية الوصول إلى هذه اللوحة", parse_mode=ParseMode.MARKDOWN_V2)
             return
             
         action = query.data.split('_')[1]
@@ -125,13 +125,13 @@ class AdminPanel:
                 self._cancel_action(query, context)
         except Exception as e:
             logger.error(f"فشل معالجة إجراء المشرف: {str(e)}", exc_info=True)
-            query.edit_message_text("❌ حدث خطأ أثناء معالجة طلبك")
+            query.edit_message_text("❌ حدث خطأ أثناء معالجة طلبك", parse_mode=ParseMode.MARKDOWN_V2)
 
     def _show_stats(self, query, context):
         """عرض الإحصائيات مع تنسيق محسن"""
         stats = self.get_stats()
         message = (
-            "📊 *إحصائيات البوت*\n\n"
+            "📊 \*إحصائيات البوت\*\n\n"
             f"• 👥 المستخدمون: `{stats['total_users']}`\n"
             f"• 💎 المميزون: `{stats['premium_users']}`\n"
             f"• 🔄 النشطون اليوم: `{stats['active_today']}`\n"
@@ -147,7 +147,7 @@ class AdminPanel:
         """بدء عملية التفعيل مع تحسينات التدفق"""
         context.user_data['admin_action'] = 'activate'
         query.edit_message_text(
-            "✍️ أرسل *معرف المستخدم* لتفعيل الاشتراك:",
+            "✍️ أرسل \*معرف المستخدم\* لتفعيل الاشتراك:",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("« إلغاء", callback_data="admin_cancel")]
@@ -158,9 +158,9 @@ class AdminPanel:
         """بدء عملية البث مع توجيهات أوضح"""
         context.user_data['admin_action'] = 'broadcast'
         query.edit_message_text(
-            "📩 أرسل الرسالة التي تريد بثها *لجميع المستخدمين*:\n\n"
+            "📩 أرسل الرسالة التي تريد بثها \*لجميع المستخدمين\*:\n\n"
             "⚠️ يمكنك استخدام تنسيق MarkdownV2:\n"
-            "`*عريض*` `_مائل_` `[رابط](example.com)`",
+            "`\*عريض\*` `\_مائل\_` `\[رابط\]\(example\.com\)`",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("« إلغاء", callback_data="admin_cancel")]
@@ -171,7 +171,7 @@ class AdminPanel:
         """بدء طلب معلومات المستخدم مع واجهة محسنة"""
         context.user_data['admin_action'] = 'user_info'
         query.edit_message_text(
-            "🆔 أرسل *معرف المستخدم* لعرض معلوماته:",
+            "🆔 أرسل \*معرف المستخدم\* لعرض معلوماته:",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("« إلغاء", callback_data="admin_cancel")]
@@ -183,14 +183,15 @@ class AdminPanel:
         context.user_data.pop('admin_action', None)
         query.edit_message_text(
             "تم إلغاء الإجراء",
-            reply_markup=self.get_admin_dashboard()
+            reply_markup=self.get_admin_dashboard(),
+            parse_mode=ParseMode.MARKDOWN_V2
         )
 
     def process_admin_message(self, update, context):
         """معالجة رسائل المشرف مع تحسينات التحقق"""
         user_id = update.effective_user.id
         if not self.is_admin(user_id):
-            update.message.reply_text("⛔ ليس لديك صلاحية الوصول إلى هذه الميزة")
+            update.message.reply_text("⛔ ليس لديك صلاحية الوصول إلى هذه الميزة", parse_mode=ParseMode.MARKDOWN_V2)
             return
             
         action = context.user_data.get('admin_action')
@@ -199,7 +200,7 @@ class AdminPanel:
             
         text = update.message.text.strip()
         if not text:
-            update.message.reply_text("⚠️ يرجى إرسال محتوى صالح")
+            update.message.reply_text("⚠️ يرجى إرسال محتوى صالح", parse_mode=ParseMode.MARKDOWN_V2)
             return
             
         try:
@@ -211,7 +212,7 @@ class AdminPanel:
                 self._process_user_info(update, text)
         except Exception as e:
             logger.error(f"فشل معالجة رسالة المشرف: {str(e)}", exc_info=True)
-            update.message.reply_text("❌ حدث خطأ أثناء معالجة طلبك")
+            update.message.reply_text("❌ حدث خطأ أثناء معالجة طلبك", parse_mode=ParseMode.MARKDOWN_V2)
 
     def _process_activation(self, update, user_id_str):
         """معالجة التفعيل مع تحسينات التحقق"""
@@ -223,10 +224,10 @@ class AdminPanel:
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
             else:
-                update.message.reply_text("❌ فشل في تفعيل الاشتراك")
+                update.message.reply_text("❌ فشل في تفعيل الاشتراك", parse_mode=ParseMode.MARKDOWN_V2)
         except ValueError:
             update.message.reply_text(
-                "⚠️ يجب إدخال *معرف مستخدم* صحيح (أرقام فقط)",
+                "⚠️ يجب إدخال \*معرف مستخدم\* صحيح \(أرقام فقط\)",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
 
@@ -235,7 +236,7 @@ class AdminPanel:
         try:
             users = self.firebase.ref.child('users').get() or {}
             if not users:
-                update.message.reply_text("⚠️ لا يوجد مستخدمون لإرسال الإشعار")
+                update.message.reply_text("⚠️ لا يوجد مستخدمون لإرسال الإشعار", parse_mode=ParseMode.MARKDOWN_V2)
                 return
                 
             total = len(users)
@@ -244,13 +245,19 @@ class AdminPanel:
             
             # إرسال أول رسالة تحضيرية
             progress_msg = update.message.reply_text(
-                f"جاري إرسال الإشعار لـ {total} مستخدم...\n\n"
+                f"جاري إرسال الإشعار لـ {total} مستخدم\.\.\.\n\n"
                 f"✅ تم إرسالها لـ 0 مستخدم\n"
-                f"❌ فشل إرسالها لـ 0 مستخدم"
+                f"❌ فشل إرسالها لـ 0 مستخدم",
+                parse_mode=ParseMode.MARKDOWN_V2
             )
             
-            for i, (uid, _) in enumerate(users.items(), 1):
+            for i, (uid, user_data) in enumerate(users.items(), 1):
                 try:
+                    # التعديل المطلوب: التحقق من اشتراك premium أو voice_id
+                    if not user_data.get('premium', {}).get('is_premium') and not user_data.get('voice', {}).get('voice_id'):
+                        failed_users.append(str(uid))
+                        continue
+                        
                     update.message.bot.send_message(
                         chat_id=uid,
                         text=message,
@@ -266,17 +273,18 @@ class AdminPanel:
                 if i % 10 == 0 or i == total:
                     try:
                         progress_msg.edit_text(
-                            f"جاري إرسال الإشعار لـ {total} مستخدم...\n\n"
+                            f"جاري إرسال الإشعار لـ {total} مستخدم\.\.\.\n\n"
                             f"✅ تم إرسالها لـ {success} مستخدم\n"
                             f"❌ فشل إرسالها لـ {len(failed_users)} مستخدم\n"
-                            f"📊 إكتمل: {(i/total)*100:.1f}%"
+                            f"📊 إكتمل: {(i/total)*100:.1f}%",
+                            parse_mode=ParseMode.MARKDOWN_V2
                         )
                     except:
                         pass
             
             # إرسال النتيجة النهائية
             result_msg = (
-                f"📊 *نتيجة البث العام*\n\n"
+                f"📊 \*نتيجة البث العام\*\n\n"
                 f"• ✅ تم الإرسال بنجاح: `{success}`\n"
                 f"• ❌ فشل الإرسال: `{len(failed_users)}`\n"
                 f"• 📨 إجمالي المستهدفين: `{total}`"
@@ -284,7 +292,7 @@ class AdminPanel:
             
             if failed_users:
                 result_msg += f"\n\n📋 قائمة المعرفات الفاشلة:\n`{', '.join(failed_users[:50])}`" + (
-                    "..." if len(failed_users) > 50 else ""
+                    "\.\.\." if len(failed_users) > 50 else ""
                 )
             
             update.message.reply_text(
@@ -294,7 +302,7 @@ class AdminPanel:
             
         except Exception as e:
             logger.error(f"فشل كامل في عملية البث: {str(e)}", exc_info=True)
-            update.message.reply_text("❌ حدث خطأ جسيم أثناء عملية البث")
+            update.message.reply_text("❌ حدث خطأ جسيم أثناء عملية البث", parse_mode=ParseMode.MARKDOWN_V2)
 
     def _format_last_active(self, user_data):
         """تنسيق وقت النشاط الأخير مع تحسينات الدقة"""
@@ -319,7 +327,7 @@ class AdminPanel:
             elif delta.days < 7:
                 return f"منذ {delta.days} يوم"
             else:
-                return last_active.strftime('%Y-%m-%d')
+                return last_active.strftime('%Y\-%m\-%d')
         except:
             return "وقت غير معروف"
 
@@ -327,25 +335,24 @@ class AdminPanel:
         """معالجة معلومات المستخدم مع عرض مفصل"""
         try:
             user_id = int(user_id_str)
-            user_data = self.firebase.get_user_data(user_id) or {}
-            
+            user_data = self.firebase.get_user_data(user_id)
             if not user_data:
-                update.message.reply_text("⚠️ لا يوجد مستخدم بهذا المعرف")
+                update.message.reply_text("⚠️ لا يوجد مستخدم بهذا المعرف", parse_mode=ParseMode.MARKDOWN_V2)
                 return
                 
             premium = user_data.get('premium', {})
             usage = user_data.get('usage', {})
             
             msg = (
-                f"📋 *معلومات المستخدم*\n\n"
+                f"📋 \*معلومات المستخدم\*\n\n"
                 f"• 🆔 المعرف: `{user_id}`\n"
                 f"• 👤 الاسم: `{user_data.get('full_name', 'غير معروف')}`\n"
                 f"• 📛 اليوزر: @{user_data.get('username', 'غير متوفر')}\n"
                 f"• 💎 الحالة: `{'مميز ✅' if premium.get('is_premium') else 'عادي ⚠️'}`\n"
                 f"• 📝 الأحرف المستخدمة: `{usage.get('total_chars', 0):,}`\n"
-                f"• 🎤 صوت مستنسخ: `{'نعم' if user_data.get('voice_cloned') else 'لا'}`\n"
+                f"• 🎤 صوت مستنسخ: `{'نعم' if user_data.get('voice', {}).get('voice_id') else 'لا'}`\n"
                 f"• 🕒 آخر نشاط: `{self._format_last_active(user_data)}`\n"
-                f"• 📅 تاريخ التسجيل: `{datetime.fromtimestamp(user_data.get('first_join', {}).get('.sv', 0)).strftime('%Y-%m-%d') if isinstance(user_data.get('first_join'), dict) else 'غير معروف'}`"
+                f"• 📅 تاريخ التسجيل: `{datetime.fromtimestamp(user_data.get('first_join', {}).get('.sv', 0)).strftime('%Y\-%m\-%d') if isinstance(user_data.get('first_join'), dict) else 'غير معروف'}`"
             )
             
             update.message.reply_text(
@@ -355,6 +362,6 @@ class AdminPanel:
             
         except ValueError:
             update.message.reply_text(
-                "⚠️ يجب إدخال *معرف مستخدم* صحيح (أرقام فقط)",
+                "⚠️ يجب إدخال \*معرف مستخدم\* صحيح \(أرقام فقط\)",
                 parse_mode=ParseMode.MARKDOWN_V2
-    )
+            )
