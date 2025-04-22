@@ -131,11 +131,11 @@ class AdminPanel:
         """عرض الإحصائيات مع تنسيق محسن"""
         stats = self.get_stats()
         message = (
-            "📊 \*إحصائيات البوت\*\n\n"
-            f"• 👥 المستخدمون: `{stats['total_users']}`\n"
-            f"• 💎 المميزون: `{stats['premium_users']}`\n"
-            f"• 🔄 النشطون اليوم: `{stats['active_today']}`\n"
-            f"• 📨 إجمالي الأحرف: `{stats['total_requests']:,}`"
+            r"📊 \*إحصائيات البوت\*\n\n"
+            fr"• 👥 المستخدمون: `{stats['total_users']}`\n"
+            fr"• 💎 المميزون: `{stats['premium_users']}`\n"
+            fr"• 🔄 النشطون اليوم: `{stats['active_today']}`\n"
+            fr"• 📨 إجمالي الأحرف: `{stats['total_requests']:,}`"
         )
         query.edit_message_text(
             text=message,
@@ -158,9 +158,9 @@ class AdminPanel:
         """بدء عملية البث مع توجيهات أوضح"""
         context.user_data['admin_action'] = 'broadcast'
         query.edit_message_text(
-            "📩 أرسل الرسالة التي تريد بثها \*لجميع المستخدمين\*:\n\n"
-            "⚠️ يمكنك استخدام تنسيق MarkdownV2:\n"
-            "`\*عريض\*` `\_مائل\_` `\[رابط\]\(example\.com\)`",
+            r"📩 أرسل الرسالة التي تريد بثها \*لجميع المستخدمين\*:\n\n"
+            r"⚠️ يمكنك استخدام تنسيق MarkdownV2:\n"
+            r"`\*عريض\*` `\_مائل\_` `\[رابط\]\(example\.com\)`",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("« إلغاء", callback_data="admin_cancel")]
@@ -171,7 +171,7 @@ class AdminPanel:
         """بدء طلب معلومات المستخدم مع واجهة محسنة"""
         context.user_data['admin_action'] = 'user_info'
         query.edit_message_text(
-            "🆔 أرسل \*معرف المستخدم\* لعرض معلوماته:",
+            r"🆔 أرسل \*معرف المستخدم\* لعرض معلوماته:",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("« إلغاء", callback_data="admin_cancel")]
@@ -227,7 +227,7 @@ class AdminPanel:
                 update.message.reply_text("❌ فشل في تفعيل الاشتراك", parse_mode=ParseMode.MARKDOWN_V2)
         except ValueError:
             update.message.reply_text(
-                "⚠️ يجب إدخال \*معرف مستخدم\* صحيح \(أرقام فقط\)",
+                r"⚠️ يجب إدخال \*معرف مستخدم\* صحيح \(أرقام فقط\)",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
 
@@ -245,9 +245,9 @@ class AdminPanel:
             
             # إرسال أول رسالة تحضيرية
             progress_msg = update.message.reply_text(
-                f"جاري إرسال الإشعار لـ {total} مستخدم\.\.\.\n\n"
-                f"✅ تم إرسالها لـ 0 مستخدم\n"
-                f"❌ فشل إرسالها لـ 0 مستخدم",
+                fr"جاري إرسال الإشعار لـ {total} مستخدم\.\.\.\n\n"
+                fr"✅ تم إرسالها لـ 0 مستخدم\n"
+                fr"❌ فشل إرسالها لـ 0 مستخدم",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
             
@@ -273,10 +273,10 @@ class AdminPanel:
                 if i % 10 == 0 or i == total:
                     try:
                         progress_msg.edit_text(
-                            f"جاري إرسال الإشعار لـ {total} مستخدم\.\.\.\n\n"
-                            f"✅ تم إرسالها لـ {success} مستخدم\n"
-                            f"❌ فشل إرسالها لـ {len(failed_users)} مستخدم\n"
-                            f"📊 إكتمل: {(i/total)*100:.1f}%",
+                            fr"جاري إرسال الإشعار لـ {total} مستخدم\.\.\.\n\n"
+                            fr"✅ تم إرسالها لـ {success} مستخدم\n"
+                            fr"❌ فشل إرسالها لـ {len(failed_users)} مستخدم\n"
+                            fr"📊 إكتمل: {(i/total)*100:.1f}%",
                             parse_mode=ParseMode.MARKDOWN_V2
                         )
                     except:
@@ -284,10 +284,10 @@ class AdminPanel:
             
             # إرسال النتيجة النهائية
             result_msg = (
-                f"📊 \*نتيجة البث العام\*\n\n"
-                f"• ✅ تم الإرسال بنجاح: `{success}`\n"
-                f"• ❌ فشل الإرسال: `{len(failed_users)}`\n"
-                f"• 📨 إجمالي المستهدفين: `{total}`"
+                fr"📊 \*نتيجة البث العام\*\n\n"
+                fr"• ✅ تم الإرسال بنجاح: `{success}`\n"
+                fr"• ❌ فشل الإرسال: `{len(failed_users)}`\n"
+                fr"• 📨 إجمالي المستهدفين: `{total}`"
             )
             
             if failed_users:
@@ -344,15 +344,15 @@ class AdminPanel:
             usage = user_data.get('usage', {})
             
             msg = (
-                f"📋 \*معلومات المستخدم\*\n\n"
-                f"• 🆔 المعرف: `{user_id}`\n"
-                f"• 👤 الاسم: `{user_data.get('full_name', 'غير معروف')}`\n"
-                f"• 📛 اليوزر: @{user_data.get('username', 'غير متوفر')}\n"
-                f"• 💎 الحالة: `{'مميز ✅' if premium.get('is_premium') else 'عادي ⚠️'}`\n"
-                f"• 📝 الأحرف المستخدمة: `{usage.get('total_chars', 0):,}`\n"
-                f"• 🎤 صوت مستنسخ: `{'نعم' if user_data.get('voice', {}).get('voice_id') else 'لا'}`\n"
-                f"• 🕒 آخر نشاط: `{self._format_last_active(user_data)}`\n"
-                f"• 📅 تاريخ التسجيل: `{datetime.fromtimestamp(user_data.get('first_join', {}).get('.sv', 0)).strftime('%Y\-%m\-%d') if isinstance(user_data.get('first_join'), dict) else 'غير معروف'}`"
+                fr"📋 \*معلومات المستخدم\*\n\n"
+                fr"• 🆔 المعرف: `{user_id}`\n"
+                fr"• 👤 الاسم: `{user_data.get('full_name', 'غير معروف')}`\n"
+                fr"• 📛 اليوزر: @{user_data.get('username', 'غير متوفر')}\n"
+                fr"• 💎 الحالة: `{'مميز ✅' if premium.get('is_premium') else 'عادي ⚠️'}`\n"
+                fr"• 📝 الأحرف المستخدمة: `{usage.get('total_chars', 0):,}`\n"
+                fr"• 🎤 صوت مستنسخ: `{'نعم' if user_data.get('voice', {}).get('voice_id') else 'لا'}`\n"
+                fr"• 🕒 آخر نشاط: `{self._format_last_active(user_data)}`\n"
+                fr"• 📅 تاريخ التسجيل: `{datetime.fromtimestamp(user_data.get('first_join', {}).get('.sv', 0)).strftime('%Y\-%m\-%d') if isinstance(user_data.get('first_join'), dict) else 'غير معروف'}`"
             )
             
             update.message.reply_text(
