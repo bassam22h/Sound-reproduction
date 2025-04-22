@@ -362,6 +362,6 @@ class AdminPanel:
             
         except ValueError:
             update.message.reply_text(
-                "⚠️ يجب إدخال \*معرف مستخدم\* صحيح \(أرقام فقط\)",
+                r"⚠️ يجب إدخال \*معرف مستخدم\* صحيح \(أرقام فقط\)",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
