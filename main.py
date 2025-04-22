@@ -199,24 +199,11 @@ def admin_command(update, context, admin):
 
 def handle_admin_actions(update, context, admin, premium):
     query = update.callback_query
-    action = query.data.split('_')[1]
-    
-    if action == "stats":
-        query.edit_message_text(admin.get_stats(), parse_mode=ParseMode.MARKDOWN)
-    elif action == "activate":
-        user_id = int(query.data.split('_')[2])
-        if premium.activate_premium(user_id, update.effective_user.id):
-            query.edit_message_text(f"✅ تم تفعيل الاشتراك للمستخدم {user_id}")
-        else:
-            query.answer("❌ فشل في التفعيل")
-    elif action == "broadcast":
-        context.user_data['awaiting_broadcast'] = True
-        query.edit_message_text("📢 أرسل الآن الرسالة التي تريد بثها:")
-    elif action == "cancel":
-        if 'awaiting_broadcast' in context.user_data:
-            del context.user_data['awaiting_broadcast']
-        query.edit_message_text("تم الإلغاء")
+    admin.handle_admin_actions(update, context)
 
+def handle_messages(update, context, admin):
+    if admin.is_admin(update.effective_user.id) and 'awaiting_' in context.user_data:
+        admin.process_admin_input(update, context)
 # ========== معالجة الرسائل ==========
 def handle_audio(update, context):
     user_id = update.effective_user.id
