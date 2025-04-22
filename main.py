@@ -1,390 +1,556 @@
-import tempfile
 import os
 import logging
+import tempfile
 import json
 from flask import Flask, request, jsonify
-from telegram import Bot, Update, ParseMode, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Dispatcher, CallbackQueryHandler
+from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Updater,
+    CommandHandler,
+    MessageHandler,
+    Filters,
+    Dispatcher,
+    CallbackQueryHandler
+)
+from telegram.parsemode import ParseMode
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from firebase import FirebaseManager
-from subscription import SubscriptionManager
-from admin import AdminPanel
-from premium import PremiumManager
 from datetime import datetime
 
-# إعدادات التسجيل
+# تهيئة التسجيل
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# إنشاء تطبيق Flask
+# تهيئة التطبيق
 app = Flask(__name__)
 
-# كائنات عامة
+# تهيئة الكائنات العامة
 bot = None
 updater = None
-dp = None
+dispatcher = None
 session = None
-firebase = None
-subscription = None
-admin = None
-premium = None
-API_KEY = None
+firebase_manager = None
+subscription_manager = None
+admin_panel = None
+premium_manager = None
 
 def initialize_bot():
-    global bot, updater, dp, session, firebase, subscription, admin, premium, API_KEY
-    
-    # 1. إعداد اتصال requests
+    global bot, updater, dispatcher, session
+    global firebase_manager, subscription_manager, admin_panel, premium_manager
+
+    # 1. تهيئة اتصال الطلبات
     session = requests.Session()
     retry_strategy = Retry(
         total=3,
         backoff_factor=1,
         status_forcelist=[500, 502, 503, 504]
     )
-    adapter = HTTPAdapter(
-        max_retries=retry_strategy,
-        pool_connections=10,
-        pool_maxsize=10
-    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("https://", adapter)
+    session.mount("http://", adapter)
+
+    # 2. تهيئة Firebase
+    try:
+        from firebase import FirebaseManager
+        firebase_manager = FirebaseManager()
+    except Exception as e:
+        logger.error(f"فشل تهيئة Firebase: {str(e)}")
+        raise
+
+    # 3. تهيئة المديرين
+    from subscription import SubscriptionManager
+    from admin import AdminPanel
+    from premium import PremiumManager
     
-    # 2. إعداد Firebase والإدارة
-    firebase = FirebaseManager()
-    subscription = SubscriptionManager(firebase)
-    premium = PremiumManager(firebase)
-    admin = AdminPanel(firebase, premium)
-    
-    # 3. إعداد بوت التليجرام
+    subscription_manager = SubscriptionManager(firebase_manager)
+    premium_manager = PremiumManager(firebase_manager)
+    admin_panel = AdminPanel(firebase_manager, premium_manager)
+
+    # 4. التحقق من متغيرات البيئة
     BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-    API_KEY = os.getenv('SPEECHIFY_API_KEY')
     WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-    
-    if not all([BOT_TOKEN, API_KEY, WEBHOOK_URL]):
-        raise ValueError("Missing required environment variables")
-    
+    API_KEY = os.getenv('SPEECHIFY_API_KEY')
+
+    if not all([BOT_TOKEN, WEBHOOK_URL, API_KEY]):
+        missing = [var for var in ['BOT_TOKEN', 'WEBHOOK_URL', 'API_KEY'] if not os.getenv(var)]
+        raise ValueError(f"متغيرات البيئة المفقودة: {', '.join(missing)}")
+
+    # 5. تهيئة بوت التليجرام
     bot = Bot(token=BOT_TOKEN)
-    updater = Updater(token=BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
-    
-    # 4. تسجيل المعالجات
+    updater = Updater(bot=bot, use_context=True)
+    dispatcher = updater.dispatcher
+
+    # 6. تسجيل المعالجات
     register_handlers()
-    
-    # 5. تعيين ويب هوك
+
+    # 7. تعيين ويب هوك
     set_webhook(BOT_TOKEN, WEBHOOK_URL)
-    
+
+    logger.info("✅ تم تهيئة البوت بنجاح")
     return app
 
 def register_handlers():
     # الأوامر الأساسية
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("help", help))
-    dp.add_handler(CommandHandler("stats", stats))
-    dp.add_handler(CommandHandler("admin", lambda u,c: admin_command(u,c, admin)))
-    dp.add_handler(CommandHandler("premium", premium_info))
-    
+    dispatcher.add_handler(CommandHandler("start", handle_start))
+    dispatcher.add_handler(CommandHandler("help", handle_help))
+    dispatcher.add_handler(CommandHandler("stats", handle_stats))
+    dispatcher.add_handler(CommandHandler("admin", handle_admin))
+    dispatcher.add_handler(CommandHandler("premium", handle_premium))
+
     # معالجات الرسائل
-    dp.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
-    
+    dispatcher.add_handler(MessageHandler(Filters.voice | Filters.audio, handle_audio))
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
+
     # معالجات الضغطات
-    dp.add_handler(CallbackQueryHandler(
-        lambda u,c: handle_admin_actions(u,c, admin, premium),
-        pattern="^admin_"
-    ))
-    
+    dispatcher.add_handler(CallbackQueryHandler(handle_callback_query))
+
     # معالج الأخطاء
-    dp.add_error_handler(error_handler)
+    dispatcher.add_error_handler(handle_errors)
 
 def set_webhook(bot_token, webhook_url):
+    """تعيين ويب هوك مع التحقق من الصحة"""
     try:
+        webhook_url = webhook_url.rstrip('/')
         full_url = f"{webhook_url}/{bot_token}"
-        logger.info("جاري تعيين الويب هوك...")  # بدون عرض التوكن
+        
+        # إزالة الويب هوك الحالي إذا كان موجوداً
         bot.delete_webhook()
-        success = bot.set_webhook(url=full_url)
-        logger.info("✅ تم تعيين الويب هوك بنجاح" if success else "❌ فشل التعيين")
+        
+        # تعيين الويب هوك الجديد
+        success = bot.set_webhook(
+            url=full_url,
+            max_connections=40,
+            allowed_updates=["message", "callback_query"]
+        )
+        
+        if success:
+            logger.info(f"✅ تم تعيين الويب هوك بنجاح: {full_url}")
+        else:
+            logger.error("❌ فشل تعيين الويب هوك")
     except Exception as e:
-        logger.error(f"خطأ في الويب هوك: {str(e)}")
+        logger.error(f"❌ خطأ في تعيين الويب هوك: {str(e)}")
+        raise
 
-def error_handler(update, context):
-    logger.error(f"حدث خطأ: {context.error}", exc_info=True)
-    if update and update.effective_chat:
+def handle_errors(update, context):
+    """معالجة الأخطاء العامة"""
+    try:
+        logger.error(f"حدث خطأ: {context.error}", exc_info=True)
+        
+        if update and update.effective_chat:
+            error_msg = "⚠️ حدث خطأ غير متوقع. يرجى المحاولة لاحقًا."
+            context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=error_msg
+            )
+    except Exception as e:
+        logger.error(f"❌ فشل في معالجة الخطأ: {str(e)}")
+
+# --- معالجات الأوامر ---
+def handle_start(update, context):
+    """معالجة أمر /start"""
+    user = update.effective_user
+    chat = update.effective_chat
+    
+    # التحقق من القنوات المطلوبة أولاً
+    if not subscription_manager.check_required_channels(user.id, context):
+        return
+    
+    # ترحيب بالمستخدم
+    welcome_msg = """
+    🎤 *مرحباً بك في بوت استنساخ الأصوات!*
+    
+    ✨ *المميزات:*
+    - استنساخ صوتك من عينة صوتية
+    - تحويل النص إلى صوت باستخدام صوتك
+    
+    💡 *كيف تبدأ؟*
+    1. أرسل مقطعاً صوتياً (10-30 ثانية)
+    2. انتظر تأكيد الاستنساخ
+    3. أرسل النص لتحويله إلى صوت
+    
+    📌 *الحدود:*
+    - المستخدمون المجانيون: 500 حرف
+    - استنساخ صوت مرة واحدة فقط
+    
+    اكتب /help للمساعدة
+    """
+    
+    try:
         context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="❌ حدث خطأ غير متوقع. يرجى المحاولة لاحقًا."
+            chat_id=chat.id,
+            text=welcome_msg,
+            parse_mode=ParseMode.MARKDOWN_V2
+        )
+        
+        # تسجيل المستخدم الجديد
+        register_new_user(user)
+        
+    except Exception as e:
+        logger.error(f"فشل في معالجة أمر /start: {str(e)}")
+        context.bot.send_message(
+            chat_id=chat.id,
+            text="❌ حدث خطأ أثناء معالجة طلبك"
         )
 
-# ========== دوال معالجة الأوامر ==========
-def start(update, context):
-    user_id = update.effective_user.id
-def start(update, context):
-    user_id = update.effective_user.id
-    
-    # تجاهل جميع القيود في أمر /start
-    if not subscription.check_required_channels(user_id, context):
-        return
+def register_new_user(user):
+    """تسجيل مستخدم جديد في Firebase"""
+    try:
+        user_data = firebase_manager.get_user_data(user.id)
         
-    welcome_msg = """
-    🎤 *مرحباً بكم في بوت استنساخ الأصوات!*
-    ...
-    """
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=welcome_msg,
-        parse_mode=ParseMode.MARKDOWN
-    )
-    
-    # تسجيل المستخدم الجديد في Firebase
-    user_data = firebase.get_user_data(user_id) or {}
-    if not user_data:  # فقط للمستخدمين الجدد
-        new_user_data = {
-            'first_join': {'.sv': 'timestamp'},
-            'username': update.effective_user.username,
-            'full_name': update.effective_user.full_name,
-            'usage': {
-                'total_chars': 0,
-                'voice_cloned': False
+        if not user_data:
+            new_user = {
+                'id': user.id,
+                'username': user.username,
+                'full_name': user.full_name,
+                'first_join': {'.sv': 'timestamp'},
+                'usage': {
+                    'total_chars': 0,
+                    'voice_cloned': False
+                },
+                'language_code': user.language_code
             }
-        }
-        firebase.save_user_data(user_id, new_user_data)
+            
+            firebase_manager.save_user_data(user.id, new_user)
+            logger.info(f"تم تسجيل مستخدم جديد: {user.id}")
+    except Exception as e:
+        logger.error(f"فشل تسجيل مستخدم جديد: {str(e)}")
 
-def help(update, context):
+def handle_help(update, context):
+    """معالجة أمر /help"""
     help_msg = """
-    📝 *كيفية استخدام البوت:*
+    📝 *دليل استخدام البوت*
     
-    1. أرسل مقطعاً صوتياً (10-30 ثانية) لاستنساخ صوتك
-    2. بعد نجاح الاستنساخ، أرسل النص الذي تريد تحويله إلى صوت
+    🔹 *الخطوات الأساسية:*
+    1. أرسل مقطعاً صوتياً (10-30 ثانية)
+    2. انتظر تأكيد الاستنساخ
+    3. أرسل النص لتحويله إلى صوت
     
-    ⚠️ *ملاحظات مهمة:*
-    - الحد الأقصى 500 حرف للمستخدمين المجانيين
-    - استنساخ صوت مرة واحدة فقط للمجانيين
+    🔹 *الأوامر المتاحة:*
+    /start - بدء استخدام البوت
+    /help - عرض هذه الرسالة
+    /premium - معلومات الاشتراك المميز
     
-    💰 *للترقية إلى الإصدار المدفوع:* /premium
+    🔹 *الحدود:*
+    - المستخدمون المجانيون: 500 حرف
+    - استنساخ صوت مرة واحدة فقط
+    
+    للاستفسارات: @support
     """
+    
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=help_msg,
-        parse_mode=ParseMode.MARKDOWN
+        parse_mode=ParseMode.MARKDOWN_V2
     )
 
-def stats(update, context):
+def handle_stats(update, context):
+    """معالجة أمر /stats (للمشرفين فقط)"""
     user_id = update.effective_user.id
-    if not admin.is_admin(user_id):
+    
+    if not admin_panel.is_admin(user_id):
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="⛔ ليس لديك صلاحية الوصول إلى هذه الميزة",
-            parse_mode=ParseMode.MARKDOWN
+            text="⛔ ليس لديك صلاحية الوصول إلى هذه الميزة"
         )
         return
-        
-    stats_data = admin.get_stats()
-    stats_msg = (
-        f"📊 *إحصائيات البوت*\n\n"
-        f"👥 المستخدمون: {stats_data['total_users']}\n"
-        f"💎 المشتركون المميزون: {stats_data['premium_users']}\n"
-        f"📨 إجمالي الأحرف المستخدمة: {stats_data['total_requests']}"
-    )
+    
+    stats = admin_panel.get_stats()
+    stats_msg = f"""
+    📊 *إحصائيات البوت*
+    
+    👥 المستخدمون: {stats['total_users']}
+    💎 المشتركون: {stats['premium_users']}
+    🔄 النشطاء اليوم: {stats['active_today']}
+    📨 إجمالي الأحرف: {stats['total_requests']:,}
+    """
+    
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=stats_msg,
-        parse_mode=ParseMode.MARKDOWN
+        parse_mode=ParseMode.MARKDOWN_V2
     )
 
-def premium_info(update, context):
+def handle_admin(update, context):
+    """معالجة أمر /admin"""
     user_id = update.effective_user.id
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=premium.get_info_message(user_id),
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-def admin_command(update, context, admin):
-    if admin.is_admin(update.effective_user.id):
-        update.message.reply_text(
-            "👨‍💻 لوحة تحكم المشرفين",
-            reply_markup=admin.get_admin_dashboard()
-        )
-
-def handle_admin_actions(update, context, admin, premium):
-    query = update.callback_query
-    admin.handle_admin_actions(update, context)
-
-# ========== معالجة الرسائل ==========
-def handle_audio(update, context):
-    user_id = update.effective_user.id
-    if not (subscription.check_required_channels(user_id, context) and 
-            subscription.check_voice_clone_limit(user_id, context)):
-        return
-
-    try:
-        file = update.message.voice or update.message.audio
-        if not file:
-            context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="⚠️ الرجاء إرسال مقطع صوتي فقط (بين 10-30 ثانية)."
-            )
-            return
-
-        # تحميل الملف الصوتي
-        tg_file = context.bot.get_file(file.file_id)
-        audio_data = session.get(tg_file.file_path, timeout=10).content
-
-        # إعداد بيانات الطلب
-        data = {
-            'name': f'user_{user_id}_voice',
-            'gender': 'male',
-            'consent': json.dumps({
-                "fullName": f"User_{user_id}",
-                "email": f"user_{user_id}@bot.com"
-            }, ensure_ascii=False)
-        }
-
-        files = {'sample': ('voice_sample.ogg', audio_data, 'audio/ogg')}
-        for key, value in data.items():
-            files[key] = (None, str(value))
-
-        # إرسال الطلب إلى API
-        response = session.post(
-            'https://api.sws.speechify.com/v1/voices',
-            headers={'Authorization': f'Bearer {API_KEY}'},
-            files=files,
-            timeout=15
-        )
-
-        if response.status_code == 200:
-            voice_id = response.json().get('id')
-            voice_data = {
-                'voice_id': voice_id,
-                'timestamp': {'.sv': 'timestamp'},
-                'status': 'active'
-            }
-            
-            # تحديث حالة المستخدم
-            firebase.update_voice_clone(user_id, voice_data)
-            
-            context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="✅ *تم استنساخ صوتك بنجاح!*",
-                parse_mode=ParseMode.MARKDOWN
-            )
-        else:
-            error_msg = response.json().get('message', 'Unknown error')
-            context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"❌ *خطأ في API:* {error_msg}",
-                parse_mode=ParseMode.MARKDOWN
-            )
-
-    except Exception as e:
-        logger.error(f"Error in handle_audio: {str(e)}")
+    
+    if not admin_panel.is_admin(user_id):
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="❌ حدث خطأ غير متوقع أثناء معالجة الصوت"
+            text="⛔ ليس لديك صلاحية الوصول إلى هذه الميزة"
+        )
+        return
+    
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="👨‍💻 لوحة تحكم المشرفين",
+        reply_markup=admin_panel.get_admin_dashboard()
+    )
+
+def handle_premium(update, context):
+    """معالجة أمر /premium"""
+    user_id = update.effective_user.id
+    message = premium_manager.get_info_message(user_id)
+    
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=message,
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=premium_manager.get_upgrade_keyboard(user_id)
+    )
+
+# --- معالجات الرسائل ---
+def handle_audio(update, context):
+    """معالجة الرسائل الصوتية"""
+    user = update.effective_user
+    chat = update.effective_chat
+    
+    # التحقق من القيود
+    if not subscription_manager.check_all_limits(user.id, context):
+        return
+    
+    # معالجة الملف الصوتي
+    try:
+        file = update.message.voice or update.message.audio
+        file_size = file.file_size / (1024 * 1024)  # حجم الملف بالميجابايت
+        
+        # التحقق من حجم الملف
+        if file_size > 5:  # 5MB كحد أقصى
+            context.bot.send_message(
+                chat_id=chat.id,
+                text="⚠️ الملف كبير جداً (الحد الأقصى 5MB)"
+            )
+            return
+        
+        # تنزيل الملف الصوتي
+        file = context.bot.get_file(file.file_id)
+        audio_data = session.get(file.file_path).content
+        
+        # استنساخ الصوت
+        clone_voice(user.id, audio_data, context)
+        
+    except Exception as e:
+        logger.error(f"فشل معالجة الملف الصوتي: {str(e)}")
+        context.bot.send_message(
+            chat_id=chat.id,
+            text="❌ حدث خطأ أثناء معالجة الملف الصوتي"
+        )
+
+def clone_voice(user_id, audio_data, context):
+    """استنساخ الصوت باستخدام API"""
+    try:
+        # إعداد بيانات الطلب
+        files = {
+            'sample': ('voice.ogg', audio_data, 'audio/ogg'),
+            'name': (None, f'user_{user_id}_voice'),
+            'gender': (None, 'male')
+        }
+        
+        # إرسال الطلب
+        response = session.post(
+            'https://api.speechify.com/v1/voices',
+            headers={'Authorization': f'Bearer {os.getenv("SPEECHIFY_API_KEY")}'},
+            files=files,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            voice_id = response.json().get('id')
+            
+            # حفظ بيانات الصوت
+            voice_data = {
+                'voice_id': voice_id,
+                'status': 'active',
+                'timestamp': {'.sv': 'timestamp'}
+            }
+            
+            firebase_manager.update_voice_clone(user_id, voice_data)
+            
+            context.bot.send_message(
+                chat_id=user_id,
+                text="✅ تم استنساخ صوتك بنجاح! يمكنك الآن إرسال النصوص"
+            )
+        else:
+            error = response.json().get('error', 'Unknown error')
+            context.bot.send_message(
+                chat_id=user_id,
+                text=f"❌ فشل استنساخ الصوت: {error}"
+            )
+            
+    except Exception as e:
+        logger.error(f"فشل استنساخ الصوت: {str(e)}")
+        context.bot.send_message(
+            chat_id=user_id,
+            text="❌ حدث خطأ أثناء استنساخ الصوت"
         )
 
 def handle_text(update, context):
-    user_id = update.effective_user.id
+    """معالجة الرسائل النصية"""
+    user = update.effective_user
+    chat = update.effective_chat
     text = update.message.text
-
-    if admin.is_admin(user_id):
+    
+    # تخطي الرسائل القصيرة جداً
+    if len(text.strip()) < 3:
         return
-    if not subscription.check_required_channels(user_id, context):
+    
+    # التحقق من القيود
+    if not subscription_manager.check_all_limits(user.id, context, len(text)):
         return
-    if not subscription.check_char_limit(user_id, context, len(text)):
-        return
-    if not subscription.check_voice_clone_limit(user_id, context, ignore_limit=True):
-        return
-
+    
+    # معالجة النص
     try:
-        user_data = firebase.get_user_data(user_id)
+        user_data = firebase_manager.get_user_data(user.id)
         voice_id = user_data.get('voice', {}).get('voice_id')
         
         if not voice_id:
             context.bot.send_message(
-                chat_id=update.effective_chat.id, 
-                text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).",
-                parse_mode=ParseMode.MARKDOWN
+                chat_id=chat.id,
+                text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي"
             )
             return
+        
+        # تحويل النص إلى صوت
+        convert_text_to_speech(user.id, voice_id, text, context)
+        
+    except Exception as e:
+        logger.error(f"فشل معالجة النص: {str(e)}")
+        context.bot.send_message(
+            chat_id=chat.id,
+            text="❌ حدث خطأ أثناء معالجة النص"
+        )
 
-        # إعداد الطلب
+def convert_text_to_speech(user_id, voice_id, text, context):
+    """تحويل النص إلى صوت باستخدام API"""
+    try:
         payload = {
             "input": text,
             "voice_id": voice_id,
-            "output_format": "mp3",
-            "model": "simba-multilingual"
+            "output_format": "mp3"
         }
-
+        
         response = session.post(
-            'https://api.sws.speechify.com/v1/audio/stream',
-            headers={
-                'Authorization': f'Bearer {API_KEY}',
-                'Content-Type': 'application/json',
-                'Accept': 'audio/mpeg'
-            },
+            'https://api.speechify.com/v1/audio',
+            headers={'Authorization': f'Bearer {os.getenv("SPEECHIFY_API_KEY")}'},
             json=payload,
             stream=True,
             timeout=30
         )
-
+        
         if response.status_code == 200:
-            # معالجة الصوت
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_audio:
-                for chunk in response.iter_content(chunk_size=4096):
+            # حفظ الملف الصوتي مؤقتاً
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
+                for chunk in response.iter_content(chunk_size=1024):
                     if chunk:
-                        temp_audio.write(chunk)
-                temp_audio_path = temp_audio.name
-
-            # إرسال الصوت
-            with open(temp_audio_path, 'rb') as audio_file:
-                context.bot.send_voice(chat_id=update.effective_chat.id, voice=audio_file)
-
-            # حذف الملف المؤقت
-            os.unlink(temp_audio_path)
-
+                        f.write(chunk)
+                temp_file = f.name
+            
+            # إرسال الملف الصوتي
+            with open(temp_file, 'rb') as audio_file:
+                context.bot.send_voice(
+                    chat_id=user_id,
+                    voice=audio_file
+                )
+            
             # تحديث الاستخدام
-            firebase.update_usage(user_id, len(text))
+            firebase_manager.update_usage(user_id, len(text))
             
-            # إرسال ملخص الاستخدام
-            free_limit = int(os.getenv('FREE_CHAR_LIMIT', 500))
-            used_chars = user_data.get('usage', {}).get('total_chars', 0)
-            remaining = max(0, free_limit - (used_chars + len(text)))
+            # حذف الملف المؤقت
+            os.unlink(temp_file)
             
+        else:
+            error = response.json().get('error', 'Unknown error')
             context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"📊 الأحرف المستخدمة: {len(text)}\nالمتبقي لك: {remaining}",
-                parse_mode=ParseMode.MARKDOWN
+                chat_id=user_id,
+                text=f"❌ فشل تحويل النص إلى صوت: {error}"
             )
-
+            
     except Exception as e:
-        logger.error(f"Error in handle_text: {str(e)}", exc_info=True)
+        logger.error(f"فشل تحويل النص إلى صوت: {str(e)}")
         context.bot.send_message(
-            chat_id=update.effective_chat.id, 
-            text="❌ حدث خطأ أثناء المعالجة"
+            chat_id=user_id,
+            text="❌ حدث خطأ أثناء تحويل النص إلى صوت"
         )
-# ========== مسارات الويب ==========
-@app.route(f'/{os.getenv("TELEGRAM_BOT_TOKEN")}', methods=['POST'])
-def webhook():
-    try:
-        update = Update.de_json(request.get_json(force=True), bot)
-        dp.process_update(update)
-        return jsonify({'status': 'ok'}), 200
-    except Exception as e:
-        logger.error(f"Webhook error: {str(e)}", exc_info=True)
-        return jsonify({'status': 'error'}), 500
 
+# --- معالجات الضغطات ---
+def handle_callback_query(update, context):
+    """معالجة ضغطات الأزرار"""
+    query = update.callback_query
+    query.answer()
+    
+    data = query.data
+    
+    if data.startswith('admin_'):
+        admin_panel.handle_admin_actions(update, context)
+    elif data.startswith('premium_'):
+        handle_premium_callback(update, context)
+
+def handle_premium_callback(update, context):
+    """معالجة ضغطات الاشتراك المميز"""
+    query = update.callback_query
+    data = query.data.split('_')
+    
+    if len(data) < 3:
+        return
+    
+    action = data[1]
+    user_id = int(data[2])
+    
+    if action == 'monthly':
+        # تفعيل اشتراك شهري
+        if premium_manager.activate_premium(user_id):
+            query.edit_message_text(
+                text="✅ تم تفعيل الاشتراك المميز بنجاح!",
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+        else:
+            query.edit_message_text(
+                text="❌ فشل في التفعيل، يرجى المحاولة لاحقاً",
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+    elif action == 'trial':
+        # تفعيل تجربة مجانية
+        if premium_manager.activate_premium(user_id, is_trial=True):
+            query.edit_message_text(
+                text="🎁 تم تفعيل التجربة المجانية بنجاح!",
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+        else:
+            query.edit_message_text(
+                text="❌ فشل في تفعيل التجربة",
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+    elif action == 'info':
+        # عرض معلومات الاشتراك
+        message = premium_manager.get_info_message(user_id)
+        query.edit_message_text(
+            text=message,
+            parse_mode=ParseMode.MARKDOWN_V2,
+            reply_markup=premium_manager.get_upgrade_keyboard(user_id)
+        )
+
+# --- مسارات الويب ---
 @app.route('/')
 def index():
-    return 'Bot is running!'
+    return "Bot is running!"
 
-# ========== التشغيل الرئيسي ==========
-def create_app():
-    return initialize_bot()
+@app.route(f'/{os.getenv("TELEGRAM_BOT_TOKEN")}', methods=['POST'])
+def webhook():
+    """معالجة طلبات الويب هوك"""
+    try:
+        update = Update.de_json(request.get_json(), bot)
+        dispatcher.process_update(update)
+        return jsonify({'status': 'ok'}), 200
+    except Exception as e:
+        logger.error(f"خطأ في الويب هوك: {str(e)}")
+        return jsonify({'status': 'error'}), 500
 
+# --- تشغيل التطبيق ---
 if __name__ == '__main__':
-    app = create_app()
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app = initialize_bot()
+    port = int(os.getenv('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
