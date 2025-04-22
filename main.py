@@ -102,14 +102,12 @@ def register_handlers():
 def set_webhook(bot_token, webhook_url):
     try:
         full_url = f"{webhook_url}/{bot_token}"
+        logger.info("جاري تعيين الويب هوك...")  # بدون عرض التوكن
         bot.delete_webhook()
         success = bot.set_webhook(url=full_url)
-        if success:
-            logger.info(f"✅ تم تعيين الويب هوك بنجاح: {full_url}")
-        else:
-            logger.error("❌ فشل في تعيين الويب هوك")
+        logger.info("✅ تم تعيين الويب هوك بنجاح" if success else "❌ فشل التعيين")
     except Exception as e:
-        logger.error(f"🚨 خطأ في تعيين الويب هوك: {str(e)}")
+        logger.error(f"خطأ في الويب هوك: {str(e)}")
 
 def error_handler(update, context):
     logger.error(f"حدث خطأ: {context.error}", exc_info=True)
@@ -290,9 +288,14 @@ def handle_text(update, context):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if not (subscription.check_required_channels(user_id, context) and 
-            subscription.check_char_limit(user_id, context, len(text)) and
-            subscription.check_voice_clone_limit(user_id, context)):
+    if not subscription.check_required_channels(user_id, context):
+        return
+
+    if admin.is_admin(user_id):
+        return process_admin_text(update, context)
+
+    if not (subscription.check_char_limit(user_id, context, len(text)) and
+            subscription.check_voice_clone_limit(user_id, context, ignore_limit=True)):
         return
 
     try:
