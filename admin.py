@@ -158,53 +158,46 @@ class AdminPanel:
         context.user_data.pop('admin_action', None)
 
     def _process_activation(self, update, user_id_str):
-        """معالجة تفعيل الاشتراك"""
         try:
             user_id = int(user_id_str)
+            # تجاوز جميع الشروط للمشرفين
             if self.premium.activate_premium(user_id, update.effective_user.id):
-                update.message.reply_text(f"✅ تم التفعيل للمستخدم {user_id}")
+                update.message.reply_text(f"✅ تم تفعيل الاشتراك للمستخدم {user_id}")
             else:
-                update.message.reply_text("❌ فشل التفعيل")
+                update.message.reply_text("❌ فشل في التفعيل")
         except ValueError:
-            update.message.reply_text("⚠️ يجب إدخال رقم صحيح")
+            update.message.reply_text("⚠️ يجب إدخال معرف مستخدم صحيح")
 
     def _process_broadcast(self, update, message):
-        """تنفيذ البث العام"""
         users = self.firebase.ref.child('users').get() or {}
         success = failed = 0
-
+    
         for uid in users.keys():
             try:
+                # إرسال الرسالة بدون تحقق من الشروط
                 update.message.bot.send_message(
                     chat_id=uid,
                     text=message,
-                    parse_mode=ParseMode.MARKDOWN
+                    parse_mode=None  # إلغاء Markdown للبث العام
                 )
                 success += 1
             except Exception as e:
                 failed += 1
-                logger.error(f"❌ فشل البث لـ {uid}: {str(e)}")
-
-        update.message.reply_text(
-            f"✅ تم الإرسال لـ {success} مستخدم\n❌ فشل لـ {failed} مستخدم"
-        )
+                logger.error(f"فشل البث لـ {uid}: {str(e)}")
+    
+        update.message.reply_text(f"✅ تم الإرسال لـ {success} مستخدم\n❌ فشل لـ {failed} مستخدم")
 
     def _process_user_info(self, update, user_id_str):
-        """عرض معلومات المستخدم"""
         try:
             user_id = int(user_id_str)
             user_data = self.firebase.get_user_data(user_id) or {}
-            
-            if not user_data:
-                update.message.reply_text("⚠️ لا يوجد مستخدم")
-                return
-
-            info_msg = (
+        
+            msg = (
                 f"🆔 المعرف: {user_id}\n"
                 f"💎 الحالة: {'مميز' if user_data.get('premium', {}).get('is_premium') else 'عادي'}\n"
-                f"📊 الأحرف المستخدمة: {user_data.get('usage', {}).get('total_chars', 0):,}\n"
+                f"📊 الأحرف المستخدمة: {user_data.get('usage', {}).get('total_chars', 0)}\n"
                 f"🎤 صوت مستنسخ: {'نعم' if user_data.get('voice_cloned') else 'لا'}"
             )
-            update.message.reply_text(info_msg)
+            update.message.reply_text(msg)
         except ValueError:
-            update.message.reply_text("⚠️ يجب إدخال رقم صحيح")
+            update.message.reply_text("⚠️ يجب إدخال معرف صحيح")
