@@ -141,7 +141,7 @@ def handle_errors(update, context):
         logger.error(f"حدث خطأ: {context.error}", exc_info=True)
         
         if update and update.effective_chat:
-            error_msg = "⚠️ حدث خطأ غير متوقع\. يرجى المحاولة لاحقًا\."
+            error_msg = r"⚠️ حدث خطأ غير متوقع\. يرجى المحاولة لاحقًا\."
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=error_msg,
@@ -327,7 +327,7 @@ def handle_audio(update, context):
         if file_size > 5:  # 5MB كحد أقصى
             context.bot.send_message(
                 chat_id=chat.id,
-                text="⚠️ الملف كبير جداً \(الحد الأقصى 5MB\)",
+                text=r"⚠️ الملف كبير جداً \(الحد الأقصى 5MB\)",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
             return
@@ -379,7 +379,7 @@ def clone_voice(user_id, audio_data, context):
             
             context.bot.send_message(
                 chat_id=user_id,
-                text="✅ تم استنساخ صوتك بنجاح\! يمكنك الآن إرسال النصوص",
+                text=r"✅ تم استنساخ صوتك بنجاح\! يمكنك الآن إرسال النصوص",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
         else:
@@ -518,7 +518,7 @@ def handle_premium_callback(update, context):
         # تفعيل اشتراك شهري
         if premium_manager.activate_premium(user_id):
             query.edit_message_text(
-                text="✅ تم تفعيل الاشتراك المميز بنجاح\!",
+                text=r"✅ تم تفعيل الاشتراك المميز بنجاح\!",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
         else:
@@ -530,7 +530,7 @@ def handle_premium_callback(update, context):
         # تفعيل تجربة مجانية
         if premium_manager.activate_premium(user_id, is_trial=True):
             query.edit_message_text(
-                text="🎁 تم تفعيل التجربة المجانية بنجاح\!",
+                text=r"🎁 تم تفعيل التجربة المجانية بنجاح\!",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
         else:
