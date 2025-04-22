@@ -346,12 +346,15 @@ def handle_text(update, context):
             firebase.update_usage(user_id, len(text))
             
             # إرسال ملخص الاستخدام
-            remaining = max(0, int(os.getenv('FREE_CHAR_LIMIT', 500)) - (user_data.get('usage', {}).get('total_chars', 0) + len(text))
+            free_limit = int(os.getenv('FREE_CHAR_LIMIT', 500))
+            used_chars = user_data.get('usage', {}).get('total_chars', 0)
+            remaining = max(0, free_limit - (used_chars + len(text)))
+            
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=f"📊 الأحرف المستخدمة: {len(text)}\nالمتبقي لك: {remaining}",
                 parse_mode=ParseMode.MARKDOWN
-            ))
+            )
 
     except Exception as e:
         logger.error(f"Error in handle_text: {str(e)}", exc_info=True)
@@ -359,7 +362,6 @@ def handle_text(update, context):
             chat_id=update.effective_chat.id, 
             text="❌ حدث خطأ أثناء المعالجة"
         )
-
 # ========== مسارات الويب ==========
 @app.route(f'/{os.getenv("TELEGRAM_BOT_TOKEN")}', methods=['POST'])
 def webhook():
