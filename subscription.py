@@ -19,11 +19,14 @@ class SubscriptionManager:
     def check_voice_clone_limit(self, user_id, context=None, is_start_command=False):
         """التحقق من حد استنساخ الصوت"""
         user_data = self.firebase.get_user_data(user_id) or {}
+    def check_voice_clone_limit(self, user_id, context=None, ignore_limit=False):
+        """التحقق من حد استنساخ الصوت"""
+        user_data = self.firebase.get_user_data(user_id) or {}
     
         if user_data.get('premium', {}).get('is_premium', False):
             return True
         
-        if user_data.get('voice_cloned', False) and not is_start_command:
+        if user_data.get('voice_cloned', False) and not ignore_limit:
             self._send_alert(
                 user_id,
                 context,
