@@ -64,16 +64,15 @@ class SubscriptionManager:
         return True
 
     def check_char_limit(self, user_id, context=None, text_length=0):
-        """التحقق من الحد الأقصى للأحرف (500 حرف دائمة)"""
+        """التحقق من الحد الأقصى للأحرف"""
         user_data = self.firebase.get_user_data(user_id) or {}
-        
-        # لا توجد حدود للمميزين
+    
         if user_data.get('premium', {}).get('is_premium', False):
             return True
-            
-        total_used = user_data.get('usage', {}).get('total_chars', 0)
-        remaining = max(0, self.FREE_CHAR_LIMIT - total_used)
         
+        total_used = user_data.get('usage', {}).get('total_chars', 0)
+        remaining = self.FREE_CHAR_LIMIT - total_used
+    
         if remaining <= 0:
             self._send_alert(
                 user_id,
@@ -82,7 +81,7 @@ class SubscriptionManager:
                 f"للترقية راسل: {os.getenv('PAYMENT_CHANNEL', '@payment_channel')}"
             )
             return False
-            
+        
         if text_length > remaining:
             self._send_alert(
                 user_id,
@@ -91,9 +90,8 @@ class SubscriptionManager:
                 f"الحد الأقصى: {self.FREE_CHAR_LIMIT} حرف"
             )
             return False
-            
+        
         return True
-
     def check_voice_clone_limit(self, user_id, context=None):
         """التحقق من حد استنساخ الصوت (مرة واحدة)"""
         user_data = self.firebase.get_user_data(user_id) or {}
