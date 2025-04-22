@@ -120,10 +120,11 @@ def error_handler(update, context):
 # ========== دوال معالجة الأوامر ==========
 def start(update, context):
     user_id = update.effective_user.id
+def start(update, context):
+    user_id = update.effective_user.id
+    
+    # تجاهل جميع القيود في أمر /start
     if not subscription.check_required_channels(user_id, context):
-        return
-        
-    if not subscription.check_voice_clone_limit(user_id, context, ignore_limit=True):
         return
         
     welcome_msg = """
@@ -288,14 +289,13 @@ def handle_text(update, context):
     user_id = update.effective_user.id
     text = update.message.text
 
+    if admin.is_admin(user_id):
+        return
     if not subscription.check_required_channels(user_id, context):
         return
-
-    if admin.is_admin(user_id):
-        return process_admin_text(update, context)
-
-    if not (subscription.check_char_limit(user_id, context, len(text)) and
-            subscription.check_voice_clone_limit(user_id, context, ignore_limit=True)):
+    if not subscription.check_char_limit(user_id, context, len(text)):
+        return
+    if not subscription.check_voice_clone_limit(user_id, context, ignore_limit=True):
         return
 
     try:
