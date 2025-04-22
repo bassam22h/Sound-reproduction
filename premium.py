@@ -19,7 +19,9 @@ class PremiumManager:
         self.CHARS_MONTHLY = self._safe_env_to_int('PREMIUM_CHARS_MONTHLY', 50000)
         self.MAX_PER_REQUEST = self._safe_env_to_int('PREMIUM_MAX_PER_REQUEST', 10000)
         self.PRICE = os.getenv('PREMIUM_PRICE', '5 دولار')
-        self.PAYMENT_CHANNEL = os.getenv('PAYMENT_CHANNEL', '@premium_support')
+        self.PAYMENT_CHANNEL = os.getenv('PAYMENT_CHANNEL', '@premium_support').strip()
+        if not self.PAYMENT_CHANNEL.startswith('@'):
+            self.PAYMENT_CHANNEL = '@' + self.PAYMENT_CHANNEL
         self.TRIAL_DAYS = self._safe_env_to_int('PREMIUM_TRIAL_DAYS', 0)
         self.TRIAL_CHARS = self._safe_env_to_int('PREMIUM_TRIAL_CHARS', 0)
 
@@ -36,9 +38,6 @@ class PremiumManager:
         if self.CHARS_MONTHLY <= 0:
             logger.error("❌ حد الأحرف الشهري يجب أن يكون أكبر من الصفر")
             raise ValueError("حد الأحرف الشهري غير صالح")
-
-        if not self.PAYMENT_CHANNEL.startswith('@'):
-            logger.warning("⚠️ قناة الدفع يجب أن تبدأ ب @")
 
     def activate_premium(self, user_id, admin_id=None, is_trial=False):
         """تفعيل الاشتراك المميز مع دعم التجربة المجانية"""
@@ -147,11 +146,11 @@ class PremiumManager:
                 progress_bar = self._generate_progress_bar(used_chars, total_chars)
                 
                 return (
-                    f"💎 *حسابك مميز* ({premium.get('plan_type', 'premium')})\n\n"
+                    f"💎 \*حسابك مميز\* \({premium.get('plan_type', 'premium')}\)\n\n"
                     f"⏳ المتبقي: {remaining_days} يوم\n"
                     f"📊 الاستخدام: {used_chars:,} / {total_chars:,} حرف\n"
                     f"{progress_bar}\n\n"
-                    f"🔄 تجديد تلقائي: {expiry_date.strftime('%Y-%m-%d')}"
+                    f"🔄 تجديد تلقائي: {expiry_date.strftime('%Y\-%m\-%d')}"
                 )
             else:
                 free_limit = int(os.getenv('FREE_CHAR_LIMIT', 500))
@@ -159,17 +158,16 @@ class PremiumManager:
                 remaining = max(0, free_limit - used_chars)
                 progress_bar = self._generate_progress_bar(used_chars, free_limit)
                 
-                return (
-                    "💰 *الاشتراك المميز*\n\n"
-                    "✨ المميزات:\n"
-                    f"- {self.CHARS_MONTHLY:,} حرف شهرياً\n"
-                    "- استنساخ صوت غير محدود\n"
-                    "- أولوية في المعالجة\n\n"
-                    f"📊 استخدامك الحالي: {used_chars:,} / {free_limit:,} حرف\n"
-                    f"{progress_bar}\n\n"
-                    f"💵 السعر: {self.PRICE}\n"
-                    f"للاشتراك: {self.PAYMENT_CHANNEL}"
+                text = (
+                    "💰 \*الاشتراك المميز\*\\n\\n"
+                    "✨ \*المميزات:\*\\n"
+                    f"\\- {self.CHARS_MONTHLY:,} حرف شهرياً\\n"
+                    "\\- استنساخ صوت غير محدود\\n"
+                    "\\- أولوية في المعالجة\\n\\n"
+                    f"💵 \*السعر:\* {self.PRICE.replace('-', '\\-')}\\n"
+                    f"للاشتراك: {self.PAYMENT_CHANNEL.replace('-', '\\-')}"
                 )
+                return text
         except Exception as e:
             logger.error(f"❌ فشل إنشاء رسالة المعلومات: {str(e)}")
             return "⚠️ تعذر تحميل معلومات الاشتراك"
