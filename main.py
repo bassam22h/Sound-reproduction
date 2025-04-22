@@ -111,9 +111,10 @@ def set_webhook(bot_token, webhook_url):
 # ========== دوال معالجة الأوامر ==========
 def start(update, context):
     user_id = update.effective_user.id
-    if not subscription.check_all_limits(user_id, context):
+    if not subscription.check_required_channels(user_id, context):
         return
-        
+    if not subscription.check_voice_clone_limit(user_id, context, is_start_command=True):
+        return   
     welcome_msg = """
     🎤 *مرحباً بكم في بوت استنساخ الأصوات!*
     
