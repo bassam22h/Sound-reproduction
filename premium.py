@@ -65,21 +65,13 @@ class PremiumManager:
     def get_info_message(self, user_id):
         """رسالة معلومات الاشتراك"""
         if self.check_premium_status(user_id):
-            user_data = self.firebase.get_user_data(user_id)
-            remaining = user_data['premium']['remaining_chars']
-            expiry = datetime.fromtimestamp(user_data['premium']['expires_on'])
-            
+            return "💎 حسابك مفعل كاشتراك مميز"
+        else:
             return (
-                f"💎 *حسابك مميز*\n\n"
-                f"⏳ المتبقي: {remaining:,} حرف\n"
-                f"📅 ينتهي في: {expiry.strftime('%Y-%m-%d')}\n"
-                f"💵 السعر: {self.PREMIUM_PRICE}"
-            )
-        return (
-            f"💰 *ترقية للاشتراك المميز*\n\n"
-            f"✨ المميزات:\n"
-            f"- {self.PREMIUM_CHARS_MONTHLY:,} حرف شهرياً\n"
-            f"- استنساخ صوت غير محدود\n"
-            f"- حد {self.PREMIUM_MAX_PER_REQUEST:,} حرف/طلب\n\n"
-            f"للاشتراك راسل: {self.PAYMENT_CHANNEL}"
+                "💰 *الاشتراك المميز*\n\n"
+                "✨ المميزات:\n"
+                "- 50000 حرف شهرياً\n"
+                "- استنساخ صوت غير محدود\n\n"
+                f"💵 السعر: {self.PREMIUM_PRICE}\n"
+                f"للاشتراك راسل: {self.PAYMENT_CHANNEL}"
             )
