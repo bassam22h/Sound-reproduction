@@ -27,10 +27,12 @@ class AdminPanel:
     def get_stats(self):
         """إحصائيات البوت"""
         users = self.firebase.ref.child('users').get() or {}
-        stats = {
-            'total': len(users),
-            'premium': sum(1 for u in users.values() if u.get('premium', {}).get('is_premium')),
-            'active': sum(u.get('usage', {}).get('requests', 0) for u in users.values())
+        premium_users = sum(1 for u in users.values() if u.get('premium', {}).get('is_premium', False))
+    
+        return {
+            'total_users': len(users),
+            'premium_users': premium_users,
+            'total_requests': sum(u.get('usage', {}).get('total_chars', 0) for u in users.values())
         }
         return (
             f"📈 *إحصائيات البوت*\n\n"
