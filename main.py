@@ -170,21 +170,29 @@ def stats(update, context):
     if not admin.is_admin(user_id):
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="⛔ ليس لديك صلاحية الوصول إلى هذه الميزة"
+            text="⛔ ليس لديك صلاحية الوصول إلى هذه الميزة",
+            parse_mode=ParseMode.MARKDOWN
         )
         return
         
-    stats = admin.get_stats()
-    stats_msg = f"""
-    📊 *إحصائيات البوت:*
-    
-    👥 عدد المستخدمين: {stats['total_users']}
-    💎 المشتركون المميزون: {stats['premium_users']}
-    📨 إجمالي الطلبات: {stats['total_requests']}
-    """
+    stats_data = admin.get_stats()
+    stats_msg = (
+        f"📊 *إحصائيات البوت*\n\n"
+        f"👥 المستخدمون: {stats_data['total_users']}\n"
+        f"💎 المشتركون المميزون: {stats_data['premium_users']}\n"
+        f"📨 إجمالي الأحرف المستخدمة: {stats_data['total_requests']}"
+    )
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=stats_msg,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+def premium_info(update, context):
+    user_id = update.effective_user.id
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=premium.get_info_message(user_id),
         parse_mode=ParseMode.MARKDOWN
     )
 
@@ -194,14 +202,6 @@ def admin_command(update, context, admin):
             "👨‍💻 لوحة تحكم المشرفين",
             reply_markup=admin.get_admin_dashboard()
         )
-
-def premium_info(update, context):
-    user_id = update.effective_user.id
-    update.message.reply_text(
-        premium.get_info_message(user_id),
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=premium.get_payment_keyboard()
-    )
 
 def handle_admin_actions(update, context, admin, premium):
     query = update.callback_query
