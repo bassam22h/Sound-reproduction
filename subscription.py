@@ -65,6 +65,7 @@ class SubscriptionManager:
 
     def check_char_limit(self, user_id, context=None, text_length=0):
         user_data = self.firebase.get_user_data(user_id) or {}
+    
         if user_data.get('premium', {}).get('is_premium', False):
             return True
 
@@ -72,21 +73,15 @@ class SubscriptionManager:
         remaining = self.FREE_CHAR_LIMIT - total_used
 
         if remaining <= 0:
-            self._send_alert(
-                user_id,
-                context,
-                f"⚠️ بلغت الحد الأقصى ({self.FREE_CHAR_LIMIT} حرف)\n"
-                f"للترقية راسل: {os.getenv('PAYMENT_CHANNEL')}"
-            )
-            return False
-
-        if text_length > remaining:
-            self._send_alert(
-                user_id,
-                context,
-                f"⚠️ لديك {remaining} حرف متبقٍ فقط\n"
-                f"الحد الأقصى: {self.FREE_CHAR_LIMIT} حرف"
-            )
+            try:
+                context.bot.send_message(
+                    chat_id=user_id,
+                    text=f"⚠️ بلغت الحد الأقصى ({self.FREE_CHAR_LIMIT} حرف)\n"
+                         f"للترقية راسل: {os.getenv('PAYMENT_CHANNEL', '@infoalltech')}",
+                    parse_mode=None  # تعطيل Markdown لمنع الأخطاء
+                )
+            except Exception as e:
+                logger.error(f"فشل إرسال التنبيه: {str(e)}")
             return False
 
         return True
