@@ -17,10 +17,9 @@ class SubscriptionManager:
         self.FREE_CHAR_LIMIT = self._safe_get_env('FREE_CHAR_LIMIT', 500, int)
         self.MAX_VOICE_CLONES = self._safe_get_env('MAX_VOICE_CLONES', 1, int)
         self.REQUIRED_CHANNELS = self._parse_channels()
-        self.PAYMENT_CHANNEL = os.getenv('PAYMENT_CHANNEL', '@premium_support')
-        
+        self.PAYMENT_CHANNEL = os.getenv('PAYMENT_CHANNEL', '@premium_support').strip()
         if not self.PAYMENT_CHANNEL.startswith('@'):
-            logger.warning("⚠️ قناة الدفع يجب أن تبدأ ب @")
+            self.PAYMENT_CHANNEL = '@' + self.PAYMENT_CHANNEL
 
     def _safe_get_env(self, var_name, default, var_type):
         """الحصول على متغير بيئة مع التحقق من النوع"""
@@ -66,9 +65,9 @@ class SubscriptionManager:
         # التحقق من حد الاستنساخ
         if user_data.get('voice_cloned', False) and not ignore_limit:
             alert_msg = (
-                "⚠️ *لقد وصلت إلى حد استنساخ الصوت*\n\n"
-                "يمكنك استنساخ الصوت مرة واحدة فقط في النسخة المجانية.\n"
-                f"للترقية إلى الإصدار المدفوع: {self.PAYMENT_CHANNEL}"
+                "⚠️ \*لقد وصلت إلى حد استنساخ الصوت\*\n\n"
+                "يمكنك استنساخ الصوت مرة واحدة فقط في النسخة المجانية\.\n"
+                f"للترقية إلى الإصدار المدفوع: {self.PAYMENT_CHANNEL.replace('-', '\\-')}"
             )
             
             try:
@@ -110,7 +109,7 @@ class SubscriptionManager:
         if missing_channels:
             channels_list = "\n".join([f"• {c}" for c in missing_channels])
             alert_msg = (
-                "📢 *يجب الانضمام إلى القنوات التالية أولاً*\n\n"
+                "📢 \*يجب الانضمام إلى القنوات التالية أولاً\*\n\n"
                 f"{channels_list}\n\n"
                 "بعد الانضمام، اضغط /start مرة أخرى"
             )
@@ -142,9 +141,9 @@ class SubscriptionManager:
 
         if remaining <= 0:
             alert_msg = (
-                "⚠️ *لقد وصلت إلى الحد الأقصى للأحرف*\n\n"
+                "⚠️ \*لقد وصلت إلى الحد الأقصى للأحرف\*\n\n"
                 f"الحد المجاني: {self.FREE_CHAR_LIMIT} حرف\n"
-                f"للترقية إلى الإصدار المدفوع: {self.PAYMENT_CHANNEL}"
+                f"للترقية إلى الإصدار المدفوع: {self.PAYMENT_CHANNEL.replace('-', '\\-')}"
             )
             
             try:
@@ -166,10 +165,10 @@ class SubscriptionManager:
         warning_threshold = self.FREE_CHAR_LIMIT * 0.2
         if remaining <= warning_threshold and remaining > 0:
             alert_msg = (
-                "🔔 *تنبيه: الأحرف المتبقية قليلة*\n\n"
+                "🔔 \*تنبيه: الأحرف المتبقية قليلة\*\n\n"
                 f"الأحرف المتبقية: {remaining}\n"
                 f"الحد المجاني: {self.FREE_CHAR_LIMIT} حرف\n"
-                f"للترقية إلى الإصدار المدفوع: {self.PAYMENT_CHANNEL}"
+                f"للترقية إلى الإصدار المدفوع: {self.PAYMENT_CHANNEL.replace('-', '\\-')}"
             )
             
             try:
