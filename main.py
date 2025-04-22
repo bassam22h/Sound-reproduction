@@ -351,7 +351,7 @@ def handle_text(update, context):
                 chat_id=update.effective_chat.id,
                 text=f"📊 الأحرف المستخدمة: {len(text)}\nالمتبقي لك: {remaining}",
                 parse_mode=ParseMode.MARKDOWN
-            )
+            ))
 
     except Exception as e:
         logger.error(f"Error in handle_text: {str(e)}", exc_info=True)
