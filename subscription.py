@@ -25,19 +25,21 @@ class SubscriptionManager:
 
     def check_voice_clone_limit(self, user_id, context=None, ignore_limit=False):
         user_data = self.firebase.get_user_data(user_id) or {}
-        
+    
         if user_data.get('premium', {}).get('is_premium', False):
             return True
-        
+    
         if user_data.get('voice_cloned', False) and not ignore_limit:
-            self._send_alert(
-                user_id,
-                context,
-                "⚠️ يمكنك استنساخ الصوت مرة واحدة فقط\n"
-                f"للترقية راسل: {os.getenv('PAYMENT_CHANNEL')}"
-            )
+            try:
+                context.bot.send_message(
+                    chat_id=user_id,
+                    text="⚠️ يمكنك استنساخ الصوت مرة واحدة فقط\n"
+                         f"للترقية راسل: {os.getenv('PAYMENT_CHANNEL', '@infoalltech')}",
+                    parse_mode=None  # إلغاء تحليل Markdown لمنع الأخطاء
+                )
+            except Exception as e:
+                logger.error(f"فشل إرسال التنبيه: {str(e)}")
             return False
-        
         return True
 
     def check_required_channels(self, user_id, context=None):
