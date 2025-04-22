@@ -353,8 +353,7 @@ def handle_text(update, context):
             subscription.update_usage(user_id, len(text))
             
             # إرسال ملخص الاستخدام
-            remaining_chars = int(os.getenv('FREE_CHAR_LIMIT', 500)) - user_data.get('usage', {}).get('total_chars', 0)
-        remaining = max(0, remaining_chars)
+            remaining = max(0, int(os.getenv('FREE_CHAR_LIMIT', 500)) - user_data.get('usage', {}).get('total_chars', 0))
         
         context.bot.send_message(
             chat_id=update.effective_chat.id,
