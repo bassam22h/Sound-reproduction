@@ -30,8 +30,7 @@ def handle_callback(update: Update, context: CallbackContext):
         users = db.get_all_users()
         total = len(users)
         premium = sum(1 for u in users if u.get("premium"))
-        query.message.edit_text(f"عدد المستخدمين: {total}
-المدفوعين: {premium}")
+        query.message.edit_text(f"عدد المستخدمين: {total}\nالمدفوعين: {premium}")
 
     elif data == "broadcast":
         context.user_data["awaiting_broadcast"] = True
