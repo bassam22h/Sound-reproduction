@@ -16,14 +16,23 @@ class SubscriptionManager:
             if channel.strip()
         ]
 
-    def check_all_limits(self, user_id, context=None, text_length=0):
-        """التحقق من جميع الحدود"""
-        checks = [
-            self.check_required_channels(user_id, context),
-            self.check_char_limit(user_id, context, text_length),
-            self.check_voice_clone_limit(user_id, context)
-        ]
-        return all(checks)
+    def check_voice_clone_limit(self, user_id, context=None, is_start_command=False):
+        """التحقق من حد استنساخ الصوت"""
+        user_data = self.firebase.get_user_data(user_id) or {}
+    
+        if user_data.get('premium', {}).get('is_premium', False):
+            return True
+        
+        if user_data.get('voice_cloned', False) and not is_start_command:
+            self._send_alert(
+                user_id,
+                context,
+                "⚠️ يمكنك استنساخ الصوت مرة واحدة فقط\n"
+                f"للترقية راسل: {os.getenv('PAYMENT_CHANNEL', '@payment_channel')}"
+            )
+            return False
+        
+        return True
 
     def check_required_channels(self, user_id, context=None):
         """التحقق من القنوات المطلوبة"""
