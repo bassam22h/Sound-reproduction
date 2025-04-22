@@ -146,11 +146,11 @@ class PremiumManager:
                 progress_bar = self._generate_progress_bar(used_chars, total_chars)
                 
                 return (
-                    f"💎 \*حسابك مميز\* \({premium.get('plan_type', 'premium')}\)\n\n"
-                    f"⏳ المتبقي: {remaining_days} يوم\n"
-                    f"📊 الاستخدام: {used_chars:,} / {total_chars:,} حرف\n"
-                    f"{progress_bar}\n\n"
-                    f"🔄 تجديد تلقائي: {expiry_date.strftime('%Y\-%m\-%d')}"
+                    fr"💎 \*حسابك مميز\* \({premium.get('plan_type', 'premium')}\)\n\n"
+                    fr"⏳ المتبقي: {remaining_days} يوم\n"
+                    fr"📊 الاستخدام: {used_chars:,} / {total_chars:,} حرف\n"
+                    fr"{progress_bar}\n\n"
+                    fr"🔄 تجديد تلقائي: {expiry_date.strftime('%Y\-%m\-%d')}"
                 )
             else:
                 free_limit = int(os.getenv('FREE_CHAR_LIMIT', 500))
@@ -159,13 +159,13 @@ class PremiumManager:
                 progress_bar = self._generate_progress_bar(used_chars, free_limit)
                 
                 text = (
-                    "💰 \*الاشتراك المميز\*\\n\\n"
-                    "✨ \*المميزات:\*\\n"
-                    f"\\- {self.CHARS_MONTHLY:,} حرف شهرياً\\n"
-                    "\\- استنساخ صوت غير محدود\\n"
-                    "\\- أولوية في المعالجة\\n\\n"
-                    f"💵 \*السعر:\* {self.PRICE.replace('-', '\\-')}\\n"
-                    f"للاشتراك: {self.PAYMENT_CHANNEL.replace('-', '\\-')}"
+                    r"💰 \*الاشتراك المميز\*\\n\\n"
+                    r"✨ \*المميزات:\*\\n"
+                    fr"\\- {self.CHARS_MONTHLY:,} حرف شهرياً\\n"
+                    r"\\- استنساخ صوت غير محدود\\n"
+                    r"\\- أولوية في المعالجة\\n\\n"
+                    fr"💵 \*السعر:\* {self.PRICE.replace('-', r'\-')}\\n"
+                    fr"للاشتراك: {self.PAYMENT_CHANNEL.replace('-', r'\-')}"
                 )
                 return text
         except Exception as e:
