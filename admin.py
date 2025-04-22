@@ -72,7 +72,6 @@ class AdminPanel:
         return last_used and (datetime.now().timestamp() - last_used) < 86400
 
     def handle_admin_actions(self, update, context):
-        """معالجة مركزية لجميع الإجراءات"""
         query = update.callback_query
         action = query.data.split('_')[1]
 
@@ -88,7 +87,6 @@ class AdminPanel:
             self._cancel_action(query, context)
         elif action == "close":
             query.delete_message()
-
     def _show_stats(self, query, context):
         """عرض الإحصائيات"""
         stats = self.get_stats()
@@ -192,12 +190,19 @@ class AdminPanel:
             user_id = int(user_id_str)
             user_data = self.firebase.get_user_data(user_id) or {}
         
+            if not user_data:
+                update.message.reply_text("⚠️ لا يوجد مستخدم بهذا المعرف")
+                return
+            
+            premium_status = "مميز ✅" if user_data.get('premium', {}).get('is_premium') else "عادي ⚠️"
             msg = (
-                f"🆔 المعرف: {user_id}\n"
-                f"💎 الحالة: {'مميز' if user_data.get('premium', {}).get('is_premium') else 'عادي'}\n"
-                f"📊 الأحرف المستخدمة: {user_data.get('usage', {}).get('total_chars', 0)}\n"
+                f"🆔 معرف المستخدم: {user_id}\n"
+                f"💎 حالة الاشتراك: {premium_status}\n"
+                f"📝 الأحرف المستخدمة: {user_data.get('usage', {}).get('total_chars', 0)}\n"
+                f"🕒 آخر نشاط: {self._format_last_active(user_data)}\n"
                 f"🎤 صوت مستنسخ: {'نعم' if user_data.get('voice_cloned') else 'لا'}"
             )
+        
             update.message.reply_text(msg)
         except ValueError:
-            update.message.reply_text("⚠️ يجب إدخال معرف صحيح")
+            update.message.reply_text("⚠️ يجب إدخال معرف مستخدم صحيح")
