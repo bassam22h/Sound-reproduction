@@ -113,20 +113,14 @@ def start(update, context):
     user_id = update.effective_user.id
     if not subscription.check_required_channels(user_id, context):
         return
-    if not subscription.check_voice_clone_limit(user_id, context, is_start_command=True):
-        return   
+        
+    # تجاهل التحقق من استنساخ الصوت لأمر /start
+    if not subscription.check_voice_clone_limit(user_id, context, ignore_limit=True):
+        return
+        
     welcome_msg = """
     🎤 *مرحباً بكم في بوت استنساخ الأصوات!*
-    
-    ✨ *الميزات المتاحة:*
-    - استنسخ صوتك من عينة صوتية (10-30 ثانية)
-    - حول النص إلى صوت باستخدام صوتك المستنسخ
-    
-    ⚠️ *القيود المفروضة:*
-    - 500 حرف كحد أقصى للمجانيين
-    - استنساخ صوت مرة واحدة للمجانيين
-    
-    أرسل /help للمزيد من المعلومات
+    ...
     """
     context.bot.send_message(
         chat_id=update.effective_chat.id,
