@@ -9,20 +9,23 @@ class SubscriptionManager:
     def __init__(self, firebase):
         self.firebase = firebase
         self.FREE_CHAR_LIMIT = int(os.getenv('FREE_CHAR_LIMIT', 500))
-        self.MAX_VOICE_CLONES = int(os.getenv('MAX_VOICE_CLONES', 1))
         self.REQUIRED_CHANNELS = [
             channel.strip() 
             for channel in os.getenv('REQUIRED_CHANNELS', '').split(',') 
             if channel.strip()
         ]
 
-    def check_voice_clone_limit(self, user_id, context=None, is_start_command=False):
-        """التحقق من حد استنساخ الصوت"""
-        user_data = self.firebase.get_user_data(user_id) or {}
+    def check_all_limits(self, user_id, context, text_length=0):
+        """تجمع جميع التحققات في دالة واحدة"""
+        return all([
+            self.check_required_channels(user_id, context),
+            self.check_char_limit(user_id, context, text_length),
+            self.check_voice_clone_limit(user_id, context)
+        ])
+
     def check_voice_clone_limit(self, user_id, context=None, ignore_limit=False):
-        """التحقق من حد استنساخ الصوت"""
         user_data = self.firebase.get_user_data(user_id) or {}
-    
+        
         if user_data.get('premium', {}).get('is_premium', False):
             return True
         
@@ -31,14 +34,13 @@ class SubscriptionManager:
                 user_id,
                 context,
                 "⚠️ يمكنك استنساخ الصوت مرة واحدة فقط\n"
-                f"للترقية راسل: {os.getenv('PAYMENT_CHANNEL', '@payment_channel')}"
+                f"للترقية راسل: {os.getenv('PAYMENT_CHANNEL')}"
             )
             return False
         
         return True
 
     def check_required_channels(self, user_id, context=None):
-        """التحقق من القنوات المطلوبة"""
         if not self.REQUIRED_CHANNELS:
             return True
 
@@ -60,7 +62,6 @@ class SubscriptionManager:
         return True
 
     def check_char_limit(self, user_id, context=None, text_length=0):
-        """التحقق من حد الأحرف"""
         user_data = self.firebase.get_user_data(user_id) or {}
         if user_data.get('premium', {}).get('is_premium', False):
             return True
@@ -73,7 +74,7 @@ class SubscriptionManager:
                 user_id,
                 context,
                 f"⚠️ بلغت الحد الأقصى ({self.FREE_CHAR_LIMIT} حرف)\n"
-                f"للترقية راسل: {os.getenv('PAYMENT_CHANNEL', '@payment_channel')}"
+                f"للترقية راسل: {os.getenv('PAYMENT_CHANNEL')}"
             )
             return False
 
@@ -88,25 +89,8 @@ class SubscriptionManager:
 
         return True
 
-    def check_voice_clone_limit(self, user_id, context=None):
-        """التحقق من حد استنساخ الصوت"""
-        user_data = self.firebase.get_user_data(user_id) or {}
-        if user_data.get('premium', {}).get('is_premium', False):
-            return True
-
-        if user_data.get('voice_cloned', False):
-            self._send_alert(
-                user_id,
-                context,
-                "⚠️ يمكنك استنساخ الصوت مرة واحدة فقط\n"
-                f"للترقية راسل: {os.getenv('PAYMENT_CHANNEL', '@payment_channel')}"
-            )
-            return False
-
-        return True
-
     def _send_alert(self, user_id, context, message):
-        """إرسال رسالة تنبيه"""
+        """إرسال رسالة تنبيه مع التحقق من السياق"""
         if context:
             try:
                 context.bot.send_message(
