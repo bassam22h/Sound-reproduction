@@ -313,17 +313,25 @@ def handle_audio(update, context):
     user = update.effective_user
     chat = update.effective_chat
     
-    # التحقق من القيود
+    # التحقق من القيود (مثل الاشتراك)
     if not subscription_manager.check_all_limits(user.id, context):
         return
     
-    # معالجة الملف الصوتي
     try:
         file = update.message.voice or update.message.audio
-        file_size = file.file_size / (1024 * 1024)  # حجم الملف بالميجابايت
         
-        # التحقق من حجم الملف
-        if file_size > 5:  # 5MB كحد أقصى
+        # إذا لم يكن هناك ملف صوتي
+        if not file:
+            context.bot.send_message(
+                chat_id=chat.id,
+                text="⚠️ الرجاء إرسال مقطع صوتي فقط (بين 10-30 ثانية).",
+                parse_mode='HTML'
+            )
+            return
+        
+        # التحقق من حجم الملف (5MB كحد أقصى)
+        file_size = file.file_size / (1024 * 1024)  # حجم الملف بالميجابايت
+        if file_size > 5:
             context.bot.send_message(
                 chat_id=chat.id,
                 text="⚠️ الملف كبير جداً (الحد الأقصى 5MB)",
@@ -332,10 +340,10 @@ def handle_audio(update, context):
             return
         
         # تنزيل الملف الصوتي
-        file = context.bot.get_file(file.file_id)
-        audio_data = session.get(file.file_path).content
+        tg_file = context.bot.get_file(file.file_id)
+        audio_data = session.get(tg_file.file_path, timeout=10).content
         
-        # استنساخ الصوت
+        # استنساخ الصوت مع إضافة بيانات الموافقة
         clone_voice(user.id, audio_data, context)
         
     except Exception as e:
@@ -347,18 +355,25 @@ def handle_audio(update, context):
         )
 
 def clone_voice(user_id, audio_data, context):
-    """استنساخ الصوت باستخدام API"""
+    """استنساخ الصوت باستخدام API مع بيانات الموافقة"""
     try:
-        # إعداد بيانات الطلب
+        # بيانات الموافقة (Consent Data) - مطلوبة في API
+        consent_data = {
+            "fullName": f"User_{user_id}",
+            "email": f"user_{user_id}@bot.com"
+        }
+
+        # إعداد بيانات الطلب بما في ذلك الموافقة
         files = {
-            'sample': ('voice.ogg', audio_data, 'audio/ogg'),
+            'sample': ('voice_sample.ogg', audio_data, 'audio/ogg'),
             'name': (None, f'user_{user_id}_voice'),
-            'gender': (None, 'male')
+            'gender': (None, 'male'),
+            'consent': (None, json.dumps(consent_data, ensure_ascii=False))  # إضافة بيانات الموافقة
         }
         
-        # إرسال الطلب
+        # إرسال الطلب إلى API
         response = session.post(
-            'https://api.speechify.com/v1/voices',
+            'https://api.sws.speechify.com/v1/voices',  # أو الرابط الصحيح للـ API
             headers={'Authorization': f'Bearer {os.getenv("SPEECHIFY_API_KEY")}'},
             files=files,
             timeout=30
@@ -367,7 +382,7 @@ def clone_voice(user_id, audio_data, context):
         if response.status_code == 200:
             voice_id = response.json().get('id')
             
-            # حفظ بيانات الصوت
+            # حفظ بيانات الصوت في Firebase
             voice_data = {
                 'voice_id': voice_id,
                 'status': 'active',
@@ -382,53 +397,69 @@ def clone_voice(user_id, audio_data, context):
                 parse_mode='HTML'
             )
         else:
-            error = response.json().get('error', 'Unknown error')
+            error_msg = response.json().get('message', 'Unknown error')
             context.bot.send_message(
                 chat_id=user_id,
-                text=f"❌ فشل استنساخ الصوت: {error}",
+                text=f"❌ فشل استنساخ الصوت: {error_msg}",
                 parse_mode='HTML'
             )
             
+    except json.JSONDecodeError:
+        logger.error("فشل تحليل رد API")
+        context.bot.send_message(
+            chat_id=user_id,
+            text="❌ حدث خطأ في معالجة الرد من الخادم",
+            parse_mode='HTML'
+        )
     except Exception as e:
         logger.error(f"فشل استنساخ الصوت: {str(e)}")
         context.bot.send_message(
             chat_id=user_id,
-            text="❌ حدث خطأ أثناء استنساخ الصوت",
+            text="❌ حدث خطأ غير متوقع أثناء استنساخ الصوت",
             parse_mode='HTML'
         )
 
 def handle_text(update, context):
-    """معالجة الرسائل النصية"""
+    """معالجة الرسائل النصية وتحويلها إلى صوت"""
     user = update.effective_user
     chat = update.effective_chat
     text = update.message.text
-    
-    # تخطي الرسائل القصيرة جداً
+
+    # تخطي الرسائل القصيرة جدًا
     if len(text.strip()) < 3:
         return
-    
-    # التحقق من القيود
+
+    # التحقق من القيود (الاشتراك، عدد الأحرف المسموح به)
     if not subscription_manager.check_all_limits(user.id, context, len(text)):
         return
-    
-    # معالجة النص
+
     try:
+        # جلب بيانات المستخدم من Firebase
         user_data = firebase_manager.get_user_data(user.id)
         voice_id = user_data.get('voice', {}).get('voice_id')
-        
+
         if not voice_id:
             context.bot.send_message(
                 chat_id=chat.id,
-                text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي",
+                text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي (10-30 ثانية).",
                 parse_mode='HTML'
             )
             return
-        
-        # تحويل النص إلى صوت
-        convert_text_to_speech(user.id, voice_id, text, context)
-        
+
+        # تحويل النص إلى صوت مع إرسال الطلب بالطريقة الصحيحة
+        audio_file = convert_text_to_speech(user.id, voice_id, text, context)
+
+        if audio_file:
+            # إرسال الصوت إلى المستخدم
+            context.bot.send_voice(
+                chat_id=chat.id,
+                voice=audio_file,
+                reply_to_message_id=update.message.message_id
+            )
+            audio_file.close()  # إغلاق الملف المؤقت بعد الإرسال
+
     except Exception as e:
-        logger.error(f"فشل معالجة النص: {str(e)}")
+        logger.error(f"فشل معالجة النص: {str(e)}", exc_info=True)
         context.bot.send_message(
             chat_id=chat.id,
             text="❌ حدث خطأ أثناء معالجة النص",
@@ -436,58 +467,51 @@ def handle_text(update, context):
         )
 
 def convert_text_to_speech(user_id, voice_id, text, context):
-    """تحويل النص إلى صوت باستخدام API"""
+    """تحويل النص إلى صوت باستخدام API (مُحسّن)"""
     try:
+        # إعداد بيانات الطلب كما في الكود الأول
         payload = {
             "input": text,
             "voice_id": voice_id,
-            "output_format": "mp3"
+            "output_format": "mp3",
+            "model": "simba-multilingual"  # <-- هذا الحقل ضروري لبعض APIs
         }
-        
+
+        # إرسال الطلب مع الرؤوس المطلوبة
         response = session.post(
-            'https://api.speechify.com/v1/audio',
-            headers={'Authorization': f'Bearer {os.getenv("SPEECHIFY_API_KEY")}'},
+            'https://api.sws.speechify.com/v1/audio/stream',  # نفس عنوان الكود الأول
+            headers={
+                'Authorization': f'Bearer {os.getenv("SPEECHIFY_API_KEY")}',
+                'Content-Type': 'application/json',
+                'Accept': 'audio/mpeg'  # مهم لاستقبال الصوت كـ MP3
+            },
             json=payload,
-            stream=True,
+            stream=True,  # للتعامل مع البيانات الكبيرة
             timeout=30
         )
-        
+
         if response.status_code == 200:
-            # حفظ الملف الصوتي مؤقتاً
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
-                for chunk in response.iter_content(chunk_size=1024):
-                    if chunk:
-                        f.write(chunk)
-                temp_file = f.name
-            
-            # إرسال الملف الصوتي
-            with open(temp_file, 'rb') as audio_file:
-                context.bot.send_voice(
-                    chat_id=user_id,
-                    voice=audio_file
-                )
-            
-            # تحديث الاستخدام
-            firebase_manager.update_usage(user_id, len(text))
-            
-            # حذف الملف المؤقت
-            os.unlink(temp_file)
-            
+            # حفظ الصوت في ملف مؤقت كما في الكود الأول
+            temp_audio = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
+            for chunk in response.iter_content(chunk_size=4096):
+                if chunk:
+                    temp_audio.write(chunk)
+            temp_audio.close()
+
+            return open(temp_audio.name, 'rb')  # إرجاع الملف للاستخدام
+
         else:
-            error = response.json().get('error', 'Unknown error')
+            error_msg = response.json().get('message', response.text)
             context.bot.send_message(
                 chat_id=user_id,
-                text=f"❌ فشل تحويل النص إلى صوت: {error}",
+                text=f"❌ فشل تحويل النص: {error_msg}",
                 parse_mode='HTML'
             )
-            
+            return None
+
     except Exception as e:
-        logger.error(f"فشل تحويل النص إلى صوت: {str(e)}")
-        context.bot.send_message(
-            chat_id=user_id,
-            text="❌ حدث خطأ أثناء تحويل النص إلى صوت",
-            parse_mode='HTML'
-        )
+        logger.error(f"فشل تحويل النص إلى صوت: {str(e)}", exc_info=True)
+        return None
 
 # --- معالجات الضغطات ---
 def handle_callback_query(update, context):
