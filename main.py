@@ -12,7 +12,6 @@ from telegram.ext import (
     Dispatcher,
     CallbackQueryHandler
 )
-from telegram.parsemode import ParseMode
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -141,11 +140,11 @@ def handle_errors(update, context):
         logger.error(f"حدث خطأ: {context.error}", exc_info=True)
         
         if update and update.effective_chat:
-            error_msg = r"⚠️ حدث خطأ غير متوقع\. يرجى المحاولة لاحقًا\."
+            error_msg = "⚠️ حدث خطأ غير متوقع. يرجى المحاولة لاحقًا."
             context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text=error_msg,
-                parse_mode=ParseMode.MARKDOWN_V2
+                parse_mode='HTML'
             )
     except Exception as e:
         logger.error(f"❌ فشل في معالجة الخطأ: {str(e)}")
@@ -162,20 +161,20 @@ def handle_start(update, context):
     
     # ترحيب بالمستخدم
     welcome_msg = """
-🎤 \*مرحباً بك في بوت استنساخ الأصوات\!\*
+<b>🎤 مرحباً بك في بوت استنساخ الأصوات!</b>
 
-✨ \*المميزات:\*
-\- استنساخ صوتك من عينة صوتية
-\- تحويل النص إلى صوت باستخدام صوتك
+<b>✨ المميزات:</b>
+- استنساخ صوتك من عينة صوتية
+- تحويل النص إلى صوت باستخدام صوتك
 
-💡 \*كيف تبدأ؟\*
-1\. أرسل مقطعاً صوتياً \(10\-30 ثانية\)
-2\. انتظر تأكيد الاستنساخ
-3\. أرسل النص لتحويله إلى صوت
+<b>💡 كيف تبدأ؟</b>
+1. أرسل مقطعاً صوتياً (10-30 ثانية)
+2. انتظر تأكيد الاستنساخ
+3. أرسل النص لتحويله إلى صوت
 
-📌 \*الحدود:\*
-\- المستخدمون المجانيون: 500 حرف
-\- استنساخ صوت مرة واحدة فقط
+<b>📌 الحدود:</b>
+- المستخدمون المجانيون: 500 حرف
+- استنساخ صوت مرة واحدة فقط
 
 اكتب /help للمساعدة
 """
@@ -184,7 +183,7 @@ def handle_start(update, context):
         context.bot.send_message(
             chat_id=chat.id,
             text=welcome_msg,
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode='HTML'
         )
         
         # تسجيل المستخدم الجديد
@@ -195,7 +194,7 @@ def handle_start(update, context):
         context.bot.send_message(
             chat_id=chat.id,
             text="❌ حدث خطأ أثناء معالجة طلبك",
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode='HTML'
         )
 
 def register_new_user(user):
@@ -224,21 +223,21 @@ def register_new_user(user):
 def handle_help(update, context):
     """معالجة أمر /help"""
     help_msg = """
-📝 \*دليل استخدام البوت\*
+<b>📝 دليل استخدام البوت</b>
 
-🔹 \*الخطوات الأساسية:\*
-1\. أرسل مقطعاً صوتياً \(10\-30 ثانية\)
-2\. انتظر تأكيد الاستنساخ
-3\. أرسل النص لتحويله إلى صوت
+<b>🔹 الخطوات الأساسية:</b>
+1. أرسل مقطعاً صوتياً (10-30 ثانية)
+2. انتظر تأكيد الاستنساخ
+3. أرسل النص لتحويله إلى صوت
 
-🔹 \*الأوامر المتاحة:\*
-/start \- بدء استخدام البوت
-/help \- عرض هذه الرسالة
-/premium \- معلومات الاشتراك المميز
+<b>🔹 الأوامر المتاحة:</b>
+/start - بدء استخدام البوت
+/help - عرض هذه الرسالة
+/premium - معلومات الاشتراك المميز
 
-🔹 \*الحدود:\*
-\- المستخدمون المجانيون: 500 حرف
-\- استنساخ صوت مرة واحدة فقط
+<b>🔹 الحدود:</b>
+- المستخدمون المجانيون: 500 حرف
+- استنساخ صوت مرة واحدة فقط
 
 للاستفسارات: @support
 """
@@ -246,7 +245,7 @@ def handle_help(update, context):
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=help_msg,
-        parse_mode=ParseMode.MARKDOWN_V2
+        parse_mode='HTML'
     )
 
 def handle_stats(update, context):
@@ -257,13 +256,13 @@ def handle_stats(update, context):
         context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="⛔ ليس لديك صلاحية الوصول إلى هذه الميزة",
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode='HTML'
         )
         return
     
     stats = admin_panel.get_stats()
     stats_msg = f"""
-📊 \*إحصائيات البوت\*
+<b>📊 إحصائيات البوت</b>
 
 👥 المستخدمون: {stats['total_users']}
 💎 المشتركون: {stats['premium_users']}
@@ -274,7 +273,7 @@ def handle_stats(update, context):
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=stats_msg,
-        parse_mode=ParseMode.MARKDOWN_V2
+        parse_mode='HTML'
     )
 
 def handle_admin(update, context):
@@ -285,14 +284,14 @@ def handle_admin(update, context):
         context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="⛔ ليس لديك صلاحية الوصول إلى هذه الميزة",
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode='HTML'
         )
         return
     
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text="👨‍💻 لوحة تحكم المشرفين",
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode='HTML',
         reply_markup=admin_panel.get_admin_dashboard()
     )
 
@@ -304,7 +303,7 @@ def handle_premium(update, context):
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=message,
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode='HTML',
         reply_markup=premium_manager.get_upgrade_keyboard(user_id)
     )
 
@@ -327,8 +326,8 @@ def handle_audio(update, context):
         if file_size > 5:  # 5MB كحد أقصى
             context.bot.send_message(
                 chat_id=chat.id,
-                text=r"⚠️ الملف كبير جداً \(الحد الأقصى 5MB\)",
-                parse_mode=ParseMode.MARKDOWN_V2
+                text="⚠️ الملف كبير جداً (الحد الأقصى 5MB)",
+                parse_mode='HTML'
             )
             return
         
@@ -344,7 +343,7 @@ def handle_audio(update, context):
         context.bot.send_message(
             chat_id=chat.id,
             text="❌ حدث خطأ أثناء معالجة الملف الصوتي",
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode='HTML'
         )
 
 def clone_voice(user_id, audio_data, context):
@@ -379,15 +378,15 @@ def clone_voice(user_id, audio_data, context):
             
             context.bot.send_message(
                 chat_id=user_id,
-                text=r"✅ تم استنساخ صوتك بنجاح\! يمكنك الآن إرسال النصوص",
-                parse_mode=ParseMode.MARKDOWN_V2
+                text="✅ تم استنساخ صوتك بنجاح! يمكنك الآن إرسال النصوص",
+                parse_mode='HTML'
             )
         else:
             error = response.json().get('error', 'Unknown error')
             context.bot.send_message(
                 chat_id=user_id,
                 text=f"❌ فشل استنساخ الصوت: {error}",
-                parse_mode=ParseMode.MARKDOWN_V2
+                parse_mode='HTML'
             )
             
     except Exception as e:
@@ -395,7 +394,7 @@ def clone_voice(user_id, audio_data, context):
         context.bot.send_message(
             chat_id=user_id,
             text="❌ حدث خطأ أثناء استنساخ الصوت",
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode='HTML'
         )
 
 def handle_text(update, context):
@@ -421,7 +420,7 @@ def handle_text(update, context):
             context.bot.send_message(
                 chat_id=chat.id,
                 text="❌ يرجى استنساخ صوتك أولاً بإرسال مقطع صوتي",
-                parse_mode=ParseMode.MARKDOWN_V2
+                parse_mode='HTML'
             )
             return
         
@@ -433,7 +432,7 @@ def handle_text(update, context):
         context.bot.send_message(
             chat_id=chat.id,
             text="❌ حدث خطأ أثناء معالجة النص",
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode='HTML'
         )
 
 def convert_text_to_speech(user_id, voice_id, text, context):
@@ -479,7 +478,7 @@ def convert_text_to_speech(user_id, voice_id, text, context):
             context.bot.send_message(
                 chat_id=user_id,
                 text=f"❌ فشل تحويل النص إلى صوت: {error}",
-                parse_mode=ParseMode.MARKDOWN_V2
+                parse_mode='HTML'
             )
             
     except Exception as e:
@@ -487,7 +486,7 @@ def convert_text_to_speech(user_id, voice_id, text, context):
         context.bot.send_message(
             chat_id=user_id,
             text="❌ حدث خطأ أثناء تحويل النص إلى صوت",
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode='HTML'
         )
 
 # --- معالجات الضغطات ---
@@ -518,32 +517,32 @@ def handle_premium_callback(update, context):
         # تفعيل اشتراك شهري
         if premium_manager.activate_premium(user_id):
             query.edit_message_text(
-                text=r"✅ تم تفعيل الاشتراك المميز بنجاح\!",
-                parse_mode=ParseMode.MARKDOWN_V2
+                text="✅ تم تفعيل الاشتراك المميز بنجاح!",
+                parse_mode='HTML'
             )
         else:
             query.edit_message_text(
                 text="❌ فشل في التفعيل، يرجى المحاولة لاحقاً",
-                parse_mode=ParseMode.MARKDOWN_V2
+                parse_mode='HTML'
             )
     elif action == 'trial':
         # تفعيل تجربة مجانية
         if premium_manager.activate_premium(user_id, is_trial=True):
             query.edit_message_text(
-                text=r"🎁 تم تفعيل التجربة المجانية بنجاح\!",
-                parse_mode=ParseMode.MARKDOWN_V2
+                text="🎁 تم تفعيل التجربة المجانية بنجاح!",
+                parse_mode='HTML'
             )
         else:
             query.edit_message_text(
                 text="❌ فشل في تفعيل التجربة",
-                parse_mode=ParseMode.MARKDOWN_V2
+                parse_mode='HTML'
             )
     elif action == 'info':
         # عرض معلومات الاشتراك
         message = premium_manager.get_info_message(user_id)
         query.edit_message_text(
             text=message,
-            parse_mode=ParseMode.MARKDOWN_V2,
+            parse_mode='HTML',
             reply_markup=premium_manager.get_upgrade_keyboard(user_id)
         )
 
