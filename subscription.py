@@ -33,106 +33,85 @@ class SubscriptionManager:
     def _parse_channels(self):
         """تحليل قائمة القنوات المطلوبة"""
         channels = []
-        raw_channels = os.getenv('REQUIRED_CHANNELS', '')
-        
-        for channel in raw_channels.split(','):
+        for channel in os.getenv('REQUIRED_CHANNELS', '').split(','):
             channel = channel.strip()
             if channel:
-                if not channel.startswith('@'):
-                    channel = f'@{channel}'
-                channels.append(channel.lower())
-        
+                channels.append(f'@{channel}' if not channel.startswith('@') else channel)
         logger.info(f"📢 القنوات المطلوبة: {channels}")
         return channels
 
     def check_all_limits(self, user_id, context, text_length=0):
-        """فحص جميع القيود مع تحسين الأداء"""
-        checks = [
+        """فحص جميع القيود"""
+        return all([
             self.check_required_channels(user_id, context),
             self.check_char_limit(user_id, context, text_length),
             self.check_voice_clone_limit(user_id, context)
-        ]
-        return all(checks)
+        ])
 
     def check_voice_clone_limit(self, user_id, context=None, ignore_limit=False):
-        """فحص حد استنساخ الصوت مع تحسينات الرسائل"""
+        """فحص حد استنساخ الصوت"""
         user_data = self.firebase.get_user_data(user_id) or {}
         
-        # التحقق من حالة الاشتراك المميز أولاً
         if user_data.get('premium', {}).get('is_premium', False):
             return True
-        
-        # التحقق من حد الاستنساخ
+            
         if user_data.get('voice_cloned', False) and not ignore_limit:
             alert_msg = (
-                r"⚠️ \*لقد وصلت إلى حد استنساخ الصوت\*\n\n"
-                r"يمكنك استنساخ الصوت مرة واحدة فقط في النسخة المجانية\.\n"
-                f"للترقية إلى الإصدار المدفوع: {self.PAYMENT_CHANNEL.replace('-', r'\-')}"
+                "<b>⚠️ لقد وصلت إلى حد استنساخ الصوت</b>\n\n"
+                "يمكنك استنساخ الصوت مرة واحدة فقط في النسخة المجانية\n"
+                f"للترقية: {self.PAYMENT_CHANNEL}"
             )
-            
             try:
                 if context:
                     context.bot.send_message(
                         chat_id=user_id,
                         text=alert_msg,
-                        parse_mode=ParseMode.MARKDOWN_V2,
+                        parse_mode=ParseMode.HTML,
                         disable_web_page_preview=True
                     )
-            except BadRequest as e:
-                logger.error(f"❌ فشل إرسال تحذير حد الصوت: {str(e)}")
             except Exception as e:
-                logger.error(f"❌ خطأ غير متوقع في إرسال تحذير الصوت: {str(e)}")
-            
+                logger.error(f"فشل إرسال تحذير الصوت: {str(e)}")
             return False
         return True
 
     def check_required_channels(self, user_id, context=None):
-        """فحص القنوات المطلوبة مع تحسينات الأداء"""
+        """فحص القنوات المطلوبة"""
         if not self.REQUIRED_CHANNELS:
             return True
 
         missing_channels = []
-        
         for channel in self.REQUIRED_CHANNELS:
             try:
                 if context:
                     member = context.bot.get_chat_member(channel, user_id)
                     if member.status in ['left', 'kicked']:
                         missing_channels.append(channel)
-            except TelegramError as e:
-                logger.error(f"❌ خطأ في التحقق من القناة {channel}: {str(e)}")
-                continue
             except Exception as e:
-                logger.error(f"❌ خطأ غير متوقع في التحقق من القنوات: {str(e)}")
-                continue
+                logger.error(f"خطأ في التحقق من القناة {channel}: {str(e)}")
 
         if missing_channels:
-            channels_list = "\n".join([f"• {c}" for c in missing_channels])
+            channels_list = "\n".join(f"• {c}" for c in missing_channels)
             alert_msg = (
-                r"📢 \*يجب الانضمام إلى القنوات التالية أولاً\*\n\n"
-                fr"{channels_list}\n\n"
-                r"بعد الانضمام، اضغط /start مرة أخرى"
+                "<b>📢 يجب الانضمام إلى القنوات التالية أولاً</b>\n\n"
+                f"{channels_list}\n\n"
+                "بعد الانضمام، اضغط /start مرة أخرى"
             )
-            
             try:
                 if context:
                     context.bot.send_message(
                         chat_id=user_id,
                         text=alert_msg,
-                        parse_mode=ParseMode.MARKDOWN_V2,
-                        disable_web_page_preview=True
+                        parse_mode=ParseMode.HTML
                     )
             except Exception as e:
-                logger.error(f"❌ فشل إرسال تحذير القنوات: {str(e)}")
-            
+                logger.error(f"فشل إرسال تحذير القنوات: {str(e)}")
             return False
         return True
 
     def check_char_limit(self, user_id, context=None, text_length=0):
-        """فحص حد الأحرف مع تحسينات الرسائل"""
+        """فحص حد الأحرف"""
         user_data = self.firebase.get_user_data(user_id) or {}
         
-        # تخطي الحد للمستخدمين المميزين
         if user_data.get('premium', {}).get('is_premium', False):
             return True
 
@@ -141,63 +120,55 @@ class SubscriptionManager:
 
         if remaining <= 0:
             alert_msg = (
-                r"⚠️ \*لقد وصلت إلى الحد الأقصى للأحرف\*\n\n"
-                fr"الحد المجاني: {self.FREE_CHAR_LIMIT} حرف\n"
-                f"للترقية إلى الإصدار المدفوع: {self.PAYMENT_CHANNEL.replace('-', r'\-')}"
+                "<b>⚠️ لقد وصلت إلى الحد الأقصى للأحرف</b>\n\n"
+                f"الحد المجاني: <code>{self.FREE_CHAR_LIMIT}</code> حرف\n"
+                f"للترقية: {self.PAYMENT_CHANNEL}"
             )
-            
             try:
                 if context:
                     context.bot.send_message(
                         chat_id=user_id,
                         text=alert_msg,
-                        parse_mode=ParseMode.MARKDOWN_V2,
-                        disable_web_page_preview=True
+                        parse_mode=ParseMode.HTML
                     )
-            except BadRequest as e:
-                logger.error(f"❌ فشل إرسال تحذير حد الأحرف: {str(e)}")
             except Exception as e:
-                logger.error(f"❌ خطأ غير متوقع في إرسال تحذير الأحرف: {str(e)}")
-            
+                logger.error(f"فشل إرسال تحذير الأحرف: {str(e)}")
             return False
 
-        # تحذير عندما يتبقى 20% فقط من الحد
-        warning_threshold = self.FREE_CHAR_LIMIT * 0.2
-        if remaining <= warning_threshold and remaining > 0:
+        if remaining <= self.FREE_CHAR_LIMIT * 0.2 and total_used > 0:
             alert_msg = (
-                r"🔔 \*تنبيه: الأحرف المتبقية قليلة\*\n\n"
-                fr"الأحرف المتبقية: {remaining}\n"
-                fr"الحد المجاني: {self.FREE_CHAR_LIMIT} حرف\n"
-                f"للترقية إلى الإصدار المدفوع: {self.PAYMENT_CHANNEL.replace('-', r'\-')}"
+                "<b>🔔 تنبيه: الأحرف المتبقية قليلة</b>\n\n"
+                f"الأحرف المتبقية: <code>{remaining}</code>\n"
+                f"الحد المجاني: <code>{self.FREE_CHAR_LIMIT}</code> حرف\n"
+                f"للترقية: {self.PAYMENT_CHANNEL}"
             )
-            
             try:
-                if context and total_used > 0:  # لا ترسل للمستخدمين الجدد
+                if context:
                     context.bot.send_message(
                         chat_id=user_id,
                         text=alert_msg,
-                        parse_mode=ParseMode.MARKDOWN_V2,
-                        disable_web_page_preview=True
+                        parse_mode=ParseMode.HTML
                     )
             except Exception as e:
-                logger.error(f"❌ فشل إرسال تنبيه الأحرف المتبقية: {str(e)}")
+                logger.error(f"فشل إرسال تنبيه الأحرف: {str(e)}")
 
         return True
 
     def get_usage_stats(self, user_id):
-        """الحصول على إحصائيات الاستخدام مع معالجة الأخطاء"""
+        """الحصول على إحصائيات الاستخدام"""
         try:
             user_data = self.firebase.get_user_data(user_id) or {}
             
             if user_data.get('premium', {}).get('is_premium', False):
-                total = user_data['premium'].get('remaining_chars', 0)
+                remaining = user_data['premium'].get('remaining_chars', 0)
                 used = user_data['usage'].get('total_chars', 0)
+                total = remaining + used
                 return {
                     'is_premium': True,
-                    'total': total + used,
+                    'total': total,
                     'used': used,
-                    'remaining': total,
-                    'percentage': (used / (total + used)) * 100 if (total + used) > 0 else 0
+                    'remaining': remaining,
+                    'percentage': (used / total) * 100 if total > 0 else 0
                 }
             else:
                 used = user_data.get('usage', {}).get('total_chars', 0)
@@ -210,32 +181,11 @@ class SubscriptionManager:
                     'percentage': (used / self.FREE_CHAR_LIMIT) * 100 if self.FREE_CHAR_LIMIT > 0 else 0
                 }
         except Exception as e:
-            logger.error(f"❌ فشل جلب إحصائيات الاستخدام: {str(e)}")
+            logger.error(f"فشل جلب إحصائيات الاستخدام: {str(e)}")
             return {
                 'is_premium': False,
                 'total': self.FREE_CHAR_LIMIT,
                 'used': 0,
                 'remaining': self.FREE_CHAR_LIMIT,
                 'percentage': 0
-            }
-
-    def _send_alert(self, user_id, context, message):
-        """إرسال تنبيه مع التحسينات"""
-        if not context or not user_id or not message:
-            return False
-
-        try:
-            context.bot.send_message(
-                chat_id=user_id,
-                text=message,
-                parse_mode=ParseMode.MARKDOWN_V2,
-                disable_web_page_preview=True,
-                disable_notification=True
-            )
-            return True
-        except BadRequest as e:
-            logger.error(f"❌ فشل إرسال التنبيه: {str(e)}")
-        except Exception as e:
-            logger.error(f"❌ خطأ غير متوقع في إرسال التنبيه: {str(e)}")
-        
-        return False
+        }
