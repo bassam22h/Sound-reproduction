@@ -12,10 +12,10 @@ class AdminPanel:
         self.premium = premium_manager
         self.ADMIN_IDS = self._load_admin_ids()
         self._validate_admins()
-        logger.info(f"✅ تم تهيئة لوحة المشرفين \| عدد المشرفين: {len(self\.ADMIN_IDS)}")
+        logger.info(f"✅ تم تهيئة لوحة المشرفين | عدد المشرفين: {len(self.ADMIN_IDS)}")
 
     def _load_admin_ids(self):
-        """تحميل معرّفات المشرفين مع التصفية والتحقق"""
+        """تحميل معرّفات المشرفين"""
         admin_ids = []
         for admin_id in os.getenv('ADMIN_IDS', '').split(','):
             admin_id = admin_id.strip()
@@ -26,19 +26,16 @@ class AdminPanel:
         return admin_ids
 
     def _validate_admins(self):
-        """التحقق من وجود مشرفين مع تسجيل تحذير واضح"""
+        """التحقق من وجود مشرفين"""
         if not self.ADMIN_IDS:
-            logger.warning("⚠️ لم يتم تعيين أي مشرفين\! البوت لن يعمل بشكل صحيح بدون مشرفين")
+            logger.warning("⚠️ لم يتم تعيين أي مشرفين! البوت لن يعمل بشكل صحيح بدون مشرفين")
 
     def is_admin(self, user_id):
-        """التحقق من الصلاحية مع تسجيل مفصل"""
-        is_admin = user_id in self.ADMIN_IDS
-        if not is_admin:
-            logger.warning(f"⚠️ محاولة وصول غير مصرح بها من المستخدم: {user_id}")
-        return is_admin
+        """التحقق من صلاحية المشرف"""
+        return user_id in self.ADMIN_IDS
 
     def get_admin_dashboard(self):
-        """إنشاء لوحة تحكم متكاملة مع تحسين التنسيق"""
+        """إنشاء لوحة تحكم المشرفين"""
         buttons = [
             [InlineKeyboardButton("📊 الإحصائيات", callback_data="admin_stats")],
             [InlineKeyboardButton("👑 تفعيل اشتراك", callback_data="admin_activate")],
@@ -49,67 +46,40 @@ class AdminPanel:
         return InlineKeyboardMarkup(buttons)
 
     def get_stats(self):
-        """جلب الإحصائيات مع معالجة شاملة للأخطاء"""
+        """جلب إحصائيات البوت"""
         try:
             users = self.firebase.ref.child('users').get() or {}
-            premium_count = 0
-            active_today = 0
-            total_chars = 0
-            
-            for user_id, user_data in users.items():
-                if isinstance(user_data, dict):
-                    # حساب المستخدمين المميزين
-                    if user_data.get('premium', {}).get('is_premium', False):
-                        premium_count += 1
-                    
-                    # حساب النشطاء اليوم
-                    if self._is_active_today(user_data):
-                        active_today += 1
-                    
-                    # حساب إجمالي الأحرف
-                    total_chars += user_data.get('usage', {}).get('total_chars', 0)
-            
-            return {
+            stats = {
                 'total_users': len(users),
-                'premium_users': premium_count,
-                'active_today': active_today,
-                'total_requests': total_chars
+                'premium_users': sum(1 for u in users.values() if isinstance(u, dict) and u.get('premium', {}).get('is_premium')),
+                'active_today': sum(1 for u in users.values() if self._is_active_today(u)),
+                'total_requests': sum(u.get('usage', {}).get('total_chars', 0) for u in users.values() if isinstance(u, dict))
             }
+            return stats
         except Exception as e:
             logger.error(f"❌ فشل جلب الإحصائيات: {str(e)}", exc_info=True)
-            return {
-                'total_users': 0,
-                'premium_users': 0,
-                'active_today': 0,
-                'total_requests': 0
-            }
+            return {'total_users': 0, 'premium_users': 0, 'active_today': 0, 'total_requests': 0}
 
     def _is_active_today(self, user_data):
-        """تحسين دقة التحقق من النشاط اليومي"""
+        """التحقق من النشاط اليومي"""
         last_used = user_data.get('last_used')
-        if not last_used:
-            return False
-            
-        if isinstance(last_used, dict):  # Firebase timestamp
+        if isinstance(last_used, dict):
             return True
-            
         try:
-            last_active = datetime.fromtimestamp(last_used)
-            return (datetime.now() - last_active).total_seconds() < 86400
+            return (datetime.now() - datetime.fromtimestamp(last_used)).total_seconds() < 86400
         except:
             return False
 
     def handle_admin_actions(self, update, context):
-        """معالجة إجراءات المشرف مع تحسينات الأمان"""
+        """معالجة إجراءات المشرف"""
         query = update.callback_query
-        query.answer()  # إعلام المستخدم بأن الإجراء تم استلامه
+        query.answer()
         
         if not self.is_admin(query.from_user.id):
-            query.edit_message_text("⛔ ليس لديك صلاحية الوصول إلى هذه اللوحة", parse_mode=ParseMode.MARKDOWN_V2)
+            query.edit_message_text("⛔ ليس لديك صلاحية الوصول إلى هذه اللوحة", parse_mode=ParseMode.HTML)
             return
             
         action = query.data.split('_')[1]
-        
         try:
             if action == "stats":
                 self._show_stats(query, context)
@@ -125,135 +95,64 @@ class AdminPanel:
                 self._cancel_action(query, context)
         except Exception as e:
             logger.error(f"فشل معالجة إجراء المشرف: {str(e)}", exc_info=True)
-            query.edit_message_text("❌ حدث خطأ أثناء معالجة طلبك", parse_mode=ParseMode.MARKDOWN_V2)
+            query.edit_message_text("❌ حدث خطأ أثناء معالجة طلبك", parse_mode=ParseMode.HTML)
 
     def _show_stats(self, query, context):
-        """عرض الإحصائيات مع تنسيق محسن"""
+        """عرض الإحصائيات"""
         stats = self.get_stats()
         message = (
-            r"📊 \*إحصائيات البوت\*\n\n"
-            fr"• 👥 المستخدمون: `{stats['total_users']}`\n"
-            fr"• 💎 المميزون: `{stats['premium_users']}`\n"
-            fr"• 🔄 النشطون اليوم: `{stats['active_today']}`\n"
-            fr"• 📨 إجمالي الأحرف: `{stats['total_requests']:,}`"
+            "<b>📊 إحصائيات البوت</b>\n\n"
+            f"• 👥 <code>المستخدمون: {stats['total_users']}</code>\n"
+            f"• 💎 <code>المميزون: {stats['premium_users']}</code>\n"
+            f"• 🔄 <code>النشطون اليوم: {stats['active_today']}</code>\n"
+            f"• 📨 <code>إجمالي الأحرف: {stats['total_requests']:,}</code>"
         )
         query.edit_message_text(
             text=message,
-            parse_mode=ParseMode.MARKDOWN_V2,
+            parse_mode=ParseMode.HTML,
             reply_markup=self.get_admin_dashboard()
         )
 
     def _start_activation(self, query, context):
-        """بدء عملية التفعيل مع تحسينات التدفق"""
+        """بدء تفعيل اشتراك"""
         context.user_data['admin_action'] = 'activate'
         query.edit_message_text(
-            "✍️ أرسل \*معرف المستخدم\* لتفعيل الاشتراك:",
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("« إلغاء", callback_data="admin_cancel")]
-            ])
+            "✍️ أرسل <b>معرف المستخدم</b> لتفعيل الاشتراك:",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« إلغاء", callback_data="admin_cancel")]])
         )
 
     def _start_broadcast(self, query, context):
-        """بدء عملية البث مع توجيهات أوضح"""
+        """بدء بث إشعار"""
         context.user_data['admin_action'] = 'broadcast'
         query.edit_message_text(
-            r"📩 أرسل الرسالة التي تريد بثها \*لجميع المستخدمين\*:\n\n"
-            r"⚠️ يمكنك استخدام تنسيق MarkdownV2:\n"
-            r"`\*عريض\*` `\_مائل\_` `\[رابط\]\(example\.com\)`",
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("« إلغاء", callback_data="admin_cancel")]
-            ])
+            "📩 أرسل الرسالة التي تريد بثها <b>لجميع المستخدمين</b>:\n\n"
+            "⚠️ يمكنك استخدام تنسيق HTML:\n"
+            "<code>&lt;b&gt;عريض&lt;/b&gt; &lt;i&gt;مائل&lt;/i&gt; &lt;a href='example.com'&gt;رابط&lt;/a&gt;</code>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« إلغاء", callback_data="admin_cancel")]])
         )
-
-    def _start_user_info(self, query, context):
-        """بدء طلب معلومات المستخدم مع واجهة محسنة"""
-        context.user_data['admin_action'] = 'user_info'
-        query.edit_message_text(
-            r"🆔 أرسل \*معرف المستخدم\* لعرض معلوماته:",
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("« إلغاء", callback_data="admin_cancel")]
-            ])
-        )
-
-    def _cancel_action(self, query, context):
-        """إلغاء الإجراء الحالي مع تنظيف البيانات"""
-        context.user_data.pop('admin_action', None)
-        query.edit_message_text(
-            "تم إلغاء الإجراء",
-            reply_markup=self.get_admin_dashboard(),
-            parse_mode=ParseMode.MARKDOWN_V2
-        )
-
-    def process_admin_message(self, update, context):
-        """معالجة رسائل المشرف مع تحسينات التحقق"""
-        user_id = update.effective_user.id
-        if not self.is_admin(user_id):
-            update.message.reply_text("⛔ ليس لديك صلاحية الوصول إلى هذه الميزة", parse_mode=ParseMode.MARKDOWN_V2)
-            return
-            
-        action = context.user_data.get('admin_action')
-        if not action:
-            return
-            
-        text = update.message.text.strip()
-        if not text:
-            update.message.reply_text("⚠️ يرجى إرسال محتوى صالح", parse_mode=ParseMode.MARKDOWN_V2)
-            return
-            
-        try:
-            if action == 'activate':
-                self._process_activation(update, text)
-            elif action == 'broadcast':
-                self._process_broadcast(update, text)
-            elif action == 'user_info':
-                self._process_user_info(update, text)
-        except Exception as e:
-            logger.error(f"فشل معالجة رسالة المشرف: {str(e)}", exc_info=True)
-            update.message.reply_text("❌ حدث خطأ أثناء معالجة طلبك", parse_mode=ParseMode.MARKDOWN_V2)
-
-    def _process_activation(self, update, user_id_str):
-        """معالجة التفعيل مع تحسينات التحقق"""
-        try:
-            user_id = int(user_id_str)
-            if self.premium.activate_premium(user_id, update.effective_user.id):
-                update.message.reply_text(
-                    f"✅ تم تفعيل الاشتراك المميز للمستخدم `{user_id}`",
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-            else:
-                update.message.reply_text("❌ فشل في تفعيل الاشتراك", parse_mode=ParseMode.MARKDOWN_V2)
-        except ValueError:
-            update.message.reply_text(
-                r"⚠️ يجب إدخال \*معرف مستخدم\* صحيح \(أرقام فقط\)",
-                parse_mode=ParseMode.MARKDOWN_V2
-            )
 
     def _process_broadcast(self, update, message):
-        """معالجة البث مع تحسينات الأداء والمراسلة"""
+        """معالجة البث العام"""
         try:
             users = self.firebase.ref.child('users').get() or {}
             if not users:
-                update.message.reply_text("⚠️ لا يوجد مستخدمون لإرسال الإشعار", parse_mode=ParseMode.MARKDOWN_V2)
+                update.message.reply_text("⚠️ لا يوجد مستخدمون لإرسال الإشعار", parse_mode=ParseMode.HTML)
                 return
-                
+
             total = len(users)
+            progress_msg = update.message.reply_text(
+                f"جاري إرسال الإشعار لـ {total} مستخدم...\n\n"
+                f"✅ تم إرسالها لـ 0 مستخدم\n"
+                f"❌ فشل إرسالها لـ 0 مستخدم",
+                parse_mode=ParseMode.HTML
+            )
+
             success = 0
             failed_users = []
-            
-            # إرسال أول رسالة تحضيرية
-            progress_msg = update.message.reply_text(
-                fr"جاري إرسال الإشعار لـ {total} مستخدم\.\.\.\n\n"
-                fr"✅ تم إرسالها لـ 0 مستخدم\n"
-                fr"❌ فشل إرسالها لـ 0 مستخدم",
-                parse_mode=ParseMode.MARKDOWN_V2
-            )
-            
             for i, (uid, user_data) in enumerate(users.items(), 1):
                 try:
-                    # التعديل المطلوب: التحقق من اشتراك premium أو voice_id
                     if not user_data.get('premium', {}).get('is_premium') and not user_data.get('voice', {}).get('voice_id'):
                         failed_users.append(str(uid))
                         continue
@@ -261,107 +160,79 @@ class AdminPanel:
                     update.message.bot.send_message(
                         chat_id=uid,
                         text=message,
-                        parse_mode=ParseMode.MARKDOWN_V2,
+                        parse_mode=ParseMode.HTML,
                         disable_web_page_preview=True
                     )
                     success += 1
                 except Exception as e:
                     failed_users.append(str(uid))
                     logger.warning(f"فشل إرسال الإشعار لـ {uid}: {str(e)}")
-                
-                # تحديث حالة التقدم كل 10 مستخدمين
+
                 if i % 10 == 0 or i == total:
-                    try:
-                        progress_msg.edit_text(
-                            fr"جاري إرسال الإشعار لـ {total} مستخدم\.\.\.\n\n"
-                            fr"✅ تم إرسالها لـ {success} مستخدم\n"
-                            fr"❌ فشل إرسالها لـ {len(failed_users)} مستخدم\n"
-                            fr"📊 إكتمل: {(i/total)*100:.1f}%",
-                            parse_mode=ParseMode.MARKDOWN_V2
-                        )
-                    except:
-                        pass
-            
-            # إرسال النتيجة النهائية
+                    progress_msg.edit_text(
+                        f"جاري إرسال الإشعار لـ {total} مستخدم...\n\n"
+                        f"✅ تم إرسالها لـ {success} مستخدم\n"
+                        f"❌ فشل إرسالها لـ {len(failed_users)} مستخدم\n"
+                        f"📊 إكتمل: {(i/total)*100:.1f}%",
+                        parse_mode=ParseMode.HTML
+                    )
+
             result_msg = (
-                fr"📊 \*نتيجة البث العام\*\n\n"
-                fr"• ✅ تم الإرسال بنجاح: `{success}`\n"
-                fr"• ❌ فشل الإرسال: `{len(failed_users)}`\n"
-                fr"• 📨 إجمالي المستهدفين: `{total}`"
+                "<b>📊 نتيجة البث العام</b>\n\n"
+                f"• ✅ تم الإرسال بنجاح: <code>{success}</code>\n"
+                f"• ❌ فشل الإرسال: <code>{len(failed_users)}</code>\n"
+                f"• 📨 إجمالي المستهدفين: <code>{total}</code>"
             )
-            
-            if failed_users:
-                result_msg += f"\n\n📋 قائمة المعرفات الفاشلة:\n`{', '.join(failed_users[:50])}`" + (
-                    "\.\.\." if len(failed_users) > 50 else ""
-                )
-            
-            update.message.reply_text(
-                result_msg,
-                parse_mode=ParseMode.MARKDOWN_V2
-            )
+            update.message.reply_text(result_msg, parse_mode=ParseMode.HTML)
             
         except Exception as e:
             logger.error(f"فشل كامل في عملية البث: {str(e)}", exc_info=True)
-            update.message.reply_text("❌ حدث خطأ جسيم أثناء عملية البث", parse_mode=ParseMode.MARKDOWN_V2)
+            update.message.reply_text("❌ حدث خطأ جسيم أثناء عملية البث", parse_mode=ParseMode.HTML)
+
+    def _process_user_info(self, update, user_id_str):
+        """عرض معلومات المستخدم"""
+        try:
+            user_id = int(user_id_str)
+            user_data = self.firebase.get_user_data(user_id) or {}
+            
+            msg = (
+                "<b>📋 معلومات المستخدم</b>\n\n"
+                f"• 🆔 المعرف: <code>{user_id}</code>\n"
+                f"• 👤 الاسم: <code>{user_data.get('full_name', 'غير معروف')}</code>\n"
+                f"• 📛 اليوزر: @{user_data.get('username', 'غير متوفر')}\n"
+                f"• 💎 الحالة: <code>{'مميز ✅' if user_data.get('premium', {}).get('is_premium') else 'عادي ⚠️'}</code>\n"
+                f"• 📝 الأحرف المستخدمة: <code>{user_data.get('usage', {}).get('total_chars', 0):,}</code>\n"
+                f"• 🎤 صوت مستنسخ: <code>{'نعم' if user_data.get('voice', {}).get('voice_id') else 'لا'}</code>\n"
+                f"• 🕒 آخر نشاط: <code>{self._format_last_active(user_data)}</code>\n"
+                f"• 📅 تاريخ التسجيل: <code>{self._format_join_date(user_data)}</code>"
+            )
+            update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+            
+        except ValueError:
+            update.message.reply_text("⚠️ يجب إدخال <b>معرف مستخدم</b> صحيح (أرقام فقط)", parse_mode=ParseMode.HTML)
 
     def _format_last_active(self, user_data):
-        """تنسيق وقت النشاط الأخير مع تحسينات الدقة"""
+        """تنسيق تاريخ آخر نشاط"""
         last_used = user_data.get('last_used')
-        if not last_used:
-            return "لم يستخدم البوت بعد"
-            
-        if isinstance(last_used, dict):  # Firebase timestamp
+        if isinstance(last_used, dict):
             return "مستخدم نشط الآن"
-            
         try:
-            last_active = datetime.fromtimestamp(last_used)
-            delta = datetime.now() - last_active
-            
+            delta = datetime.now() - datetime.fromtimestamp(last_used)
             if delta.days == 0:
-                if delta.seconds < 60:
-                    return "منذ ثواني"
-                elif delta.seconds < 3600:
-                    return f"منذ {delta.seconds//60} دقيقة"
-                else:
-                    return f"منذ {delta.seconds//3600} ساعة"
-            elif delta.days < 7:
-                return f"منذ {delta.days} يوم"
-            else:
-                return last_active.strftime('%Y\-%m\-%d')
+                if delta.seconds < 60: return "منذ ثواني"
+                elif delta.seconds < 3600: return f"منذ {delta.seconds//60} دقيقة"
+                else: return f"منذ {delta.seconds//3600} ساعة"
+            elif delta.days < 7: return f"منذ {delta.days} يوم"
+            else: return datetime.fromtimestamp(last_used).strftime('%Y-%m-%d')
         except:
             return "وقت غير معروف"
 
-    def _process_user_info(self, update, user_id_str):
-        """معالجة معلومات المستخدم مع عرض مفصل"""
+    def _format_join_date(self, user_data):
+        """تنسيق تاريخ التسجيل"""
+        join_date = user_data.get('first_join')
+        if isinstance(join_date, dict):
+            return datetime.now().strftime('%Y-%m-%d')
         try:
-            user_id = int(user_id_str)
-            user_data = self.firebase.get_user_data(user_id)
-            if not user_data:
-                update.message.reply_text("⚠️ لا يوجد مستخدم بهذا المعرف", parse_mode=ParseMode.MARKDOWN_V2)
-                return
-                
-            premium = user_data.get('premium', {})
-            usage = user_data.get('usage', {})
-            
-            msg = (
-                fr"📋 \*معلومات المستخدم\*\n\n"
-                fr"• 🆔 المعرف: `{user_id}`\n"
-                fr"• 👤 الاسم: `{user_data.get('full_name', 'غير معروف')}`\n"
-                fr"• 📛 اليوزر: @{user_data.get('username', 'غير متوفر')}\n"
-                fr"• 💎 الحالة: `{'مميز ✅' if premium.get('is_premium') else 'عادي ⚠️'}`\n"
-                fr"• 📝 الأحرف المستخدمة: `{usage.get('total_chars', 0):,}`\n"
-                fr"• 🎤 صوت مستنسخ: `{'نعم' if user_data.get('voice', {}).get('voice_id') else 'لا'}`\n"
-                fr"• 🕒 آخر نشاط: `{self._format_last_active(user_data)}`\n"
-                fr"• 📅 تاريخ التسجيل: `{datetime.fromtimestamp(user_data.get('first_join', {}).get('.sv', 0)).strftime('%Y\-%m\-%d') if isinstance(user_data.get('first_join'), dict) else 'غير معروف'}`"
-            )
-            
-            update.message.reply_text(
-                msg,
-                parse_mode=ParseMode.MARKDOWN_V2
-            )
-            
-        except ValueError:
-            update.message.reply_text(
-                r"⚠️ يجب إدخال \*معرف مستخدم\* صحيح \(أرقام فقط\)",
-                parse_mode=ParseMode.MARKDOWN_V2
-            )
+            return datetime.fromtimestamp(join_date).strftime('%Y-%m-%d')
+        except:
+            return "غير معروف"
