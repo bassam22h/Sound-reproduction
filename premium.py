@@ -9,9 +9,10 @@ logger = logging.getLogger(__name__)
 
 class PremiumManager:
     def __init__(self, firebase):
+        """Initialize Premium Manager with Firebase connection"""
         self.firebase = firebase
         self._load_config()
-        self._validate_config()
+        self._validate_config()  # تمت إضافة هذه الدالة
         logger.info("✅ تم تهيئة مدير الاشتراك المميز بنجاح")
 
     def _load_config(self):
@@ -20,17 +21,50 @@ class PremiumManager:
         self.MAX_PER_REQUEST = self._safe_get_env('PREMIUM_MAX_PER_REQUEST', 10000, int)
         self.PRICE = os.getenv('PREMIUM_PRICE', '5 دولار')
         self.PAYMENT_CHANNEL = os.getenv('PAYMENT_CHANNEL', '@premium_support').strip()
+        
         if not self.PAYMENT_CHANNEL.startswith('@'):
             self.PAYMENT_CHANNEL = '@' + self.PAYMENT_CHANNEL
+            
         self.TRIAL_DAYS = self._safe_get_env('PREMIUM_TRIAL_DAYS', 0, int)
+        if self.TRIAL_DAYS < 0:
+            logger.warning("أيام التجربة لا يمكن أن تكون سالبة، تم التعيين إلى 0")
+            self.TRIAL_DAYS = 0
+            
         self.TRIAL_CHARS = self._safe_get_env('PREMIUM_TRIAL_CHARS', 0, int)
+        if self.TRIAL_CHARS < 0:
+            logger.warning("أحرف التجربة لا يمكن أن تكون سالبة، تم التعيين إلى 0")
+            self.TRIAL_CHARS = 0
+
+    def _validate_config(self):
+        """Validates that all premium configuration is properly loaded
+        
+        Raises:
+            ValueError: If any required configuration is missing or invalid
+        """
+        required_configs = {
+            'PREMIUM_CHARS_MONTHLY': self.CHARS_MONTHLY,
+            'PREMIUM_MAX_PER_REQUEST': self.MAX_PER_REQUEST,
+            'PREMIUM_PRICE': self.PRICE,
+            'PAYMENT_CHANNEL': self.PAYMENT_CHANNEL
+        }
+        
+        for name, value in required_configs.items():
+            if not value:
+                raise ValueError(f"إعداد {name} مطلوب ولا يمكن أن يكون فارغًا")
+                
+        if not isinstance(self.CHARS_MONTHLY, int) or self.CHARS_MONTHLY <= 0:
+            raise ValueError("PREMIUM_CHARS_MONTHLY يجب أن يكون عدد صحيح موجب")
+            
+        if not isinstance(self.MAX_PER_REQUEST, int) or self.MAX_PER_REQUEST <= 0:
+            raise ValueError("PREMIUM_MAX_PER_REQUEST يجب أن يكون عدد صحيح موجب")
 
     def _safe_get_env(self, var_name, default, var_type):
         """قراءة متغير بيئة مع التحقق من النوع"""
         try:
-            return var_type(os.getenv(var_name, str(default)))
-        except (ValueError, TypeError):
-            logger.warning(f"قيمة غير صالحة لـ {var_name}, استخدام الافتراضي: {default}")
+            value = os.getenv(var_name, str(default))
+            return var_type(value) if value is not None else default
+        except (ValueError, TypeError) as e:
+            logger.warning(f"قيمة غير صالحة لـ {var_name} ({value}), استخدام الافتراضي: {default}. الخطأ: {str(e)}")
             return default
 
     def activate_premium(self, user_id, admin_id=None, is_trial=False):
@@ -64,7 +98,7 @@ class PremiumManager:
             logger.info(f"تم تفعيل الاشتراك للمستخدم {user_id} (نوع: {plan_type})")
             return True
         except Exception as e:
-            logger.error(f"فشل تفعيل الاشتراك: {str(e)}")
+            logger.error(f"فشل تفعيل الاشتراك: {str(e)}", exc_info=True)
             return False
 
     def check_premium_status(self, user_id):
@@ -85,7 +119,7 @@ class PremiumManager:
                 
             return True
         except Exception as e:
-            logger.error(f"خطأ في التحقق من الحالة: {str(e)}")
+            logger.error(f"خطأ في التحقق من الحالة: {str(e)}", exc_info=True)
             return False
 
     def get_info_message(self, user_id):
@@ -121,7 +155,7 @@ class PremiumManager:
                     f"للاشتراك: {self.PAYMENT_CHANNEL}"
                 )
         except Exception as e:
-            logger.error(f"فشل إنشاء رسالة المعلومات: {str(e)}")
+            logger.error(f"فشل إنشاء رسالة المعلومات: {str(e)}", exc_info=True)
             return "⚠️ تعذر تحميل معلومات الاشتراك"
 
     def _generate_progress_bar(self, used, total, length=10):
@@ -137,9 +171,11 @@ class PremiumManager:
         """لوحة ترقية المستخدم"""
         buttons = [
             [InlineKeyboardButton("💳 اشتراك شهري", callback_data=f"premium_monthly_{user_id}")],
-            [InlineKeyboardButton("🆓 تجربة مجانية", callback_data=f"premium_trial_{user_id}")],
+            [InlineKeyboardButton("🆓 تجربة مجانية", callback_data=f"premium_trial_{user_id}")] if self.TRIAL_DAYS > 0 else None,
             [InlineKeyboardButton("ℹ️ المميزات", callback_data=f"premium_info_{user_id}")]
         ]
+        # إزالة أي أزرار فارغة (None)
+        buttons = [btn for btn in buttons if btn is not None]
         return InlineKeyboardMarkup(buttons)
 
     def deduct_chars(self, user_id, chars_used):
@@ -161,7 +197,7 @@ class PremiumManager:
             self.firebase.ref.child('users').child(str(user_id)).update(updates)
             return True
         except Exception as e:
-            logger.error(f"فشل خصم الأحرف: {str(e)}")
+            logger.error(f"فشل خصم الأحرف: {str(e)}", exc_info=True)
             return False
 
     def deactivate_premium(self, user_id):
@@ -175,5 +211,5 @@ class PremiumManager:
             self.firebase.ref.child('users').child(str(user_id)).update(updates)
             return True
         except Exception as e:
-            logger.error(f"فشل إلغاء الاشتراك: {str(e)}")
+            logger.error(f"فشل إلغاء الاشتراك: {str(e)}", exc_info=True)
             return False
